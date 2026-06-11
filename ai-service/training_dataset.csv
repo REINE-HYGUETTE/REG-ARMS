@@ -1,0 +1,101 @@
+id,description,category,priority
+1,Power outage in entire sector no electricity since yesterday,Power Outage,High
+2,Streetlight is flickering near the market,Street Lighting,Low
+3,Transformer exploded and fire hazard near school children at risk,Safety Hazard,Critical
+4,Monthly bill seems too high please check my meter reading,Billing,Low
+5,Electricity connection request for new house construction,New Connection,Medium
+6,Complete blackout affecting hospital emergency ward critical patients,Power Outage,Critical
+7,Meter is not working and showing wrong readings for 3 months,Meter Issue,Medium
+8,Illegal connection discovered in my neighborhood posing danger,Safety Hazard,Critical
+9,Request for new electricity pole installation in our village,Infrastructure,Medium
+10,Billing dispute overcharged by 50000 RWF last month,Billing,Medium
+11,Fallen power line on main road blocking traffic dangerous,Safety Hazard,Critical
+12,Request to upgrade single phase to three phase connection,New Connection,Medium
+13,No power for 3 days affecting our small business operations,Power Outage,High
+14,Street light post damaged by vehicle accident,Street Lighting,Low
+15,Electrocution risk at broken pole near playground,Safety Hazard,Critical
+16,Request for electricity extension to new district office building,New Connection,Medium
+17,Voltage fluctuation damaging home appliances fridge and TV,Power Quality,High
+18,Prepaid meter token not loading tried many times,Meter Issue,Medium
+19,Urgent transformer repair needed serving 500 households,Infrastructure,High
+20,Low voltage issue lights dim and motors not working,Power Quality,Medium
+21,Fire sparked from electrical cable near fuel station emergency,Safety Hazard,Critical
+22,Request for street lighting installation on dark dangerous road,Street Lighting,Medium
+23,Power interruption scheduled maintenance not communicated,Power Outage,Low
+24,New electricity connection for health center construction,New Connection,High
+25,Overloaded transformer causing frequent outages in sector,Infrastructure,High
+26,Meter tampering reported by neighbor suspicious activity,Meter Issue,High
+27,Electric shock incident worker hospitalized urgent investigation,Safety Hazard,Critical
+28,Application for three phase power for factory setup,New Connection,Medium
+29,Persistent low voltage affecting welding machine business,Power Quality,Medium
+30,Billing account number wrong on invoice need correction,Billing,Low
+31,Power line too close to building roof safety concern,Safety Hazard,High
+32,Request to relocate electricity pole blocking new road construction,Infrastructure,Medium
+33,Sudden power cut affecting water pumping station no water supply,Power Outage,High
+34,Faulty streetlight causing accidents at night junction,Street Lighting,Medium
+35,Electricity theft cable hooked illegally on our line,Meter Issue,High
+36,Generator connection approval needed for hospital backup power,New Connection,High
+37,Transformer humming loudly and sparking at night,Infrastructure,High
+38,Payment made but account not credited urgent,Billing,High
+39,Request information about solar energy subsidies,General Inquiry,Low
+40,Power surge damaged all electronics in our office,Power Quality,High
+41,Broken neutral wire causing severe voltage imbalance dangerous,Safety Hazard,Critical
+42,Application for bulk power supply for new industrial park,New Connection,Medium
+43,Meter reading not done for 2 months estimated bill too high,Meter Issue,Low
+44,Illegal dumping near electrical substation security risk,Safety Hazard,Medium
+45,Request for underground cable installation residential area,Infrastructure,Medium
+46,Power outage during exam period at university urgent,Power Outage,High
+47,Sparking cables near water source contamination risk,Safety Hazard,Critical
+48,Need copy of electricity bill for bank loan application,Billing,Low
+49,Voltage dip causes production line to stop every day,Power Quality,High
+50,Night school no electricity children studying in dark,Power Outage,Medium
+51,High tension wire passing through residential compound dangerous,Safety Hazard,Critical
+52,New meter installation needed after house renovation,New Connection,Low
+53,Cable theft reported along rural distribution line,Infrastructure,High
+54,Refund request for double payment made last week,Billing,Medium
+55,Transformer oil leakage near water stream environmental risk,Safety Hazard,High
+56,Load shedding schedule not communicated affected business,Power Outage,Medium
+57,Request for electricity connection to irrigation pump agricultural,New Connection,Medium
+58,Defective circuit breaker tripping repeatedly causing outages,Infrastructure,Medium
+59,Bill paid at wrong account need transfer urgent,Billing,Medium
+60,Clinic without power for two days medicine spoiling,Power Outage,Critical
+61,Request for power line rehabilitation old network area,Infrastructure,Medium
+62,Child touched exposed wire near school minor injury,Safety Hazard,Critical
+63,Meter reading discrepancy energy audit required,Meter Issue,Medium
+64,Electricity restored but voltage very low unusable,Power Quality,Medium
+65,Application for new bulk meter for apartment building,New Connection,Medium
+66,Unauthorized connection causing voltage problems for us,Meter Issue,High
+67,Burning smell from distribution box fire risk immediate,Safety Hazard,Critical
+68,Request map of electricity network for building permit,General Inquiry,Low
+69,Power outage affecting cold storage tons of food spoiling,Power Outage,Critical
+70,Old wooden poles rotting and leaning need replacement,Infrastructure,Medium
+71,Electricity connection for rural school no power yet,New Connection,High
+72,Meter box door broken anyone can tamper with it,Meter Issue,Medium
+73,Substation fence broken unauthorized access possible,Safety Hazard,Medium
+74,Wrong tariff applied on account commercial vs residential,Billing,Medium
+75,No power supply during wedding event compensation request,Power Outage,Low
+76,High electricity bill after installing new equipment,Billing,Low
+77,Power line vibrating and making noise strong wind,Infrastructure,Low
+78,Meter bypass discovered during self inspection,Meter Issue,High
+79,Request technical assessment for solar hybrid system,General Inquiry,Low
+80,Overhead line sagging dangerously low over road,Safety Hazard,High
+81,Long term power outage rural area 2 weeks no power,Power Outage,Critical
+82,New electricity connection application for mosque,New Connection,Low
+83,Billing transfer between accounts required moved house,Billing,Low
+84,Repeated tripping at main distribution board,Infrastructure,Medium
+85,Power fluctuation affecting medical equipment hospital,Power Quality,Critical
+86,Disconnection notice received but bill already paid,Billing,High
+87,Vandalism of electricity infrastructure reported,Infrastructure,High
+88,Prepaid meter shows error code E01 cannot load,Meter Issue,Medium
+89,Request for power upgrade capacity upgrade industry,New Connection,High
+90,Live wire fallen on wet road after storm urgent,Safety Hazard,Critical
+91,Electricity disconnected without prior notice unfair,Billing,High
+92,New substation needed for growing township,Infrastructure,Medium
+93,Smart meter installation request for home,New Connection,Low
+94,Account name change after marriage documentation,Billing,Low
+95,Repeated outages every weekend affecting work,Power Outage,Medium
+96,Electricity for community borehole pump rural water access,New Connection,High
+97,Faulty insulator causing power loss on main feeder,Infrastructure,High
+98,Meter glass broken vandalism reported,Meter Issue,Low
+99,Urgent reconnection after erroneous disconnection,Billing,High
+100,Power surge from lightning strike damaged equipment,Power Quality,High

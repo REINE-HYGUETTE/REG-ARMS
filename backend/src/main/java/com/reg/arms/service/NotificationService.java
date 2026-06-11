@@ -1,0 +1,96 @@
+package com.reg.arms.service;
+
+import com.reg.arms.dto.response.ApiResponse;
+import com.reg.arms.entity.Notification;
+import com.reg.arms.entity.Request;
+import com.reg.arms.entity.User;
+import com.reg.arms.entity.enums.NotificationType;
+import com.reg.arms.entity.enums.UserRole;
+import com.reg.arms.repository.NotificationRepository;
+import com.reg.arms.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class NotificationService {
+
+    private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
+    private final SseEmitterRegistry sseEmitterRegistry;
+
+    /**
+     * Creates and persists a notification for {@code user} and immediately pushes it
+     * over SSE if the user is currently connected.
+     *
+     * @param request may be {@code null} for system-level notifications (e.g. password
+     *                reset confirmations, account approvals) that are not associated
+     *                with a specific service request.
+     */
+    @Transactional
+    public void notifyUser(User user, Request request, NotificationType type, String title, String message) {
+        Notification notification = Notification.builder()
+                .user(user)
+                .request(request)   // nullable — see Javadoc above
+                .type(type)
+                .title(title)
+                .message(message)
+                .isRead(false)
+                .emailSent(false)
+                .build();
+        notificationRepository.save(notification);
+
+        // Push live event via SSE if the user is connected
+        sseEmitterRegistry.push(user.getId(), Map.of(
+                "type",    type.name(),
+                "title",   title,
+                "message", message,
+                "requestId", request != null ? request.getId() : null
+        ));
+    }
+
+    @Transactional
+    public void notifyAdmins(Request request, NotificationType type, String title, String message) {
+        List<User> recipients = userRepository.findByRoleInAndIsActiveTrue(
+                List.of(UserRole.ADMIN));
+        for (User user : recipients) {
+            notifyUser(user, request, type, title, message);
+        }
+    }
+
+    /** Notifies both ADMIN and STAFF — used for SLA breach alerts. */
+    @Transactional
+    public void notifyStaffAndAdmins(Request request, NotificationType type, String title, String message) {
+        List<User> recipients = userRepository.findByRoleInAndIsActiveTrue(
+                List.of(UserRole.ADMIN, UserRole.STAFF));
+        for (User user : recipients) {
+            notifyUser(user, request, type, title, message);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Notification> getUserNotifications(Long userId, Pageable pageable) {
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadCount(Long userId) {
+        return notificationRepository.countByUserIdAndIsReadFalse(userId);
+    }
+
+    @Transactional
+    public void markAsRead(Long notificationId, Long userId) {
+        notificationRepository.markReadByIdAndUserId(notificationId, userId);
+    }
+
+    @Transactional
+    public void markAllAsRead(Long userId) {
+        notificationRepository.markAllReadByUserId(userId);
+    }
+}
