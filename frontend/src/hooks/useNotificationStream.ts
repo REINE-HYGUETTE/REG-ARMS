@@ -37,6 +37,8 @@ export function useNotificationStream(enabled = true) {
     es.addEventListener('notification', () => {
       queryClient.invalidateQueries({ queryKey: ['unread-count'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      // Refresh task list so technician counts stay accurate when Staff assigns
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] })
     })
 
     es.onerror = () => {

@@ -71,8 +71,7 @@ export default function RequestsListPage() {
     },
   })
 
-  // Sort: active tasks before done, then Critical → High → Medium → Low, then newest first.
-  const PRIORITY_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+  // Sort: active requests before done, then newest first.
   const isDone = (r: { status: string }) =>
     r.status === 'Resolved' || r.status === 'Closed' || r.status === 'Cancelled'
 
@@ -81,11 +80,7 @@ export default function RequestsListPage() {
     const doneA = isDone(a) ? 1 : 0
     const doneB = isDone(b) ? 1 : 0
     if (doneA !== doneB) return doneA - doneB
-    // 2. Priority tier
-    const pA = PRIORITY_ORDER[a.finalPriority] ?? 4
-    const pB = PRIORITY_ORDER[b.finalPriority] ?? 4
-    if (pA !== pB) return pA - pB
-    // 3. Newest first within same priority
+    // 2. Newest first
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 

@@ -696,6 +696,15 @@ export default function RequestDetailPage() {
                 </div>
               )}
 
+              {assignMutation.isError && (
+                <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200 mt-2">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  <span>
+                    {(assignMutation.error as { response?: { data?: { message?: string } } })?.response?.data?.message
+                      ?? 'Assignment failed. Please try again.'}
+                  </span>
+                </div>
+              )}
               {assignMutation.isSuccess && (
                 <p className="text-xs text-green-600 mt-1">Technician assigned and notified.</p>
               )}

@@ -9,7 +9,6 @@ import Spinner from '@/components/ui/Spinner'
 import LocationSelector, { type LocationValue } from '@/components/ui/LocationSelector'
 import { RoleBadge } from '@/components/ui/Badge'
 import { useAuth } from '@/lib/auth'
-import { useProvinces, useDistricts } from '@/hooks/useLocations'
 import type { User as UserType, Technician } from '@/types'
 
 const emptyLocation: LocationValue = {
@@ -357,59 +356,38 @@ function TechnicianProfileSection() {
     queryFn: () => api.get<Technician>('/technicians/me').then(r => r.data),
   })
 
+  // Fetch the user profile to get their admin-assigned district/province
+  const { data: userProfile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => api.get<UserType>('/profile').then(r => r.data),
+  })
+
   const { data: categories = [] } = useQuery<{ id: number; name: string; isActive?: boolean }[]>({
     queryKey: ['categories'],
     queryFn: () => api.get('/categories').then(r => r.data),
     staleTime: 5 * 60_000,
   })
 
-  const { data: provinces = [] } = useProvinces()
-
-  const [specText,          setSpecText]          = useState('')
-  const [selectedTags,      setSelectedTags]      = useState<string[]>([])
-  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([])
-  const [selectedDistricts, setSelectedDistricts] = useState<string[]>([])
-  const [saved,             setSaved]             = useState(false)
-  const [saveError,         setSaveError]         = useState<string | null>(null)
+  const [specText,     setSpecText]     = useState('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [saved,        setSaved]        = useState(false)
+  const [saveError,    setSaveError]    = useState<string | null>(null)
 
   // Populate from saved technician profile
   useEffect(() => {
     if (techProfile) {
       setSpecText(techProfile.specialization ?? '')
-      setSelectedTags(techProfile.specializationTags     ?? [])
-      setSelectedProvinces(techProfile.provinceCoverage  ?? [])
-      setSelectedDistricts(techProfile.districtCoverage  ?? [])
+      setSelectedTags(techProfile.specializationTags ?? [])
     }
   }, [techProfile])
 
-  // ── District fetching — one query per province slot (Rwanda has 5 provinces) ─
-  const pId = (i: number) => provinces.find(p => p.name === selectedProvinces[i])?.id ?? null
-  const { data: d0 = [] } = useDistricts(pId(0))
-  const { data: d1 = [] } = useDistricts(pId(1))
-  const { data: d2 = [] } = useDistricts(pId(2))
-  const { data: d3 = [] } = useDistricts(pId(3))
-  const { data: d4 = [] } = useDistricts(pId(4))
-  const availableDistricts = [...d0, ...d1, ...d2, ...d3, ...d4]
-
   const toggleTag = (name: string) =>
     setSelectedTags(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name])
-
-  const toggleProvince = (name: string) =>
-    setSelectedProvinces(prev =>
-      prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]
-    )
-
-  const toggleDistrict = (name: string) =>
-    setSelectedDistricts(prev =>
-      prev.includes(name) ? prev.filter(d => d !== name) : [...prev, name]
-    )
 
   const mutation = useMutation({
     mutationFn: () => api.patch('/technicians/me/profile', {
       specialization:     specText.trim() || null,
       specializationTags: selectedTags,
-      provinceCoverage:   selectedProvinces,
-      districtCoverage:   selectedDistricts,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technician-me'] })
@@ -424,6 +402,8 @@ function TechnicianProfileSection() {
   })
 
   const activeCategories = categories.filter(c => c.isActive !== false)
+  const assignedProvince = userProfile?.province
+  const assignedDistrict = userProfile?.district
 
   return (
     <div className="bg-white rounded-2xl border border-border/70 shadow-sm p-7">
@@ -440,6 +420,41 @@ function TechnicianProfileSection() {
       </div>
 
       <div className="space-y-6">
+
+        {/* ── Assigned Coverage Area — read-only ── */}
+        <div>
+          <label className="block text-[11px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+            Assigned Coverage Area
+          </label>
+          <p className="text-[11px] text-text-muted mb-3">
+            Your district and province are assigned by your administrator. You will only receive requests from this area.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {assignedProvince ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-600 text-white border border-emerald-600 shadow-sm">
+                <MapPin size={11} /> {assignedProvince}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                No province assigned
+              </span>
+            )}
+            {assignedDistrict ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white border border-blue-600 shadow-sm">
+                <MapPin size={11} /> {assignedDistrict}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                No district assigned
+              </span>
+            )}
+          </div>
+          {(!assignedProvince || !assignedDistrict) && (
+            <p className="text-[11px] text-amber-600 font-medium mt-2">
+              Contact your administrator to have your coverage area assigned.
+            </p>
+          )}
+        </div>
 
         {/* ── Specialization description ── */}
         <div>
@@ -487,77 +502,6 @@ function TechnicianProfileSection() {
             )}
           </div>
         </div>
-
-        {/* ── Province Coverage — badge chips ── */}
-        <div>
-          <label className="block text-[11px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
-            Province Coverage
-          </label>
-          <p className="text-[11px] text-text-muted mb-3">
-            Select the provinces you can be assigned to.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {provinces.map(p => {
-              const active = selectedProvinces.includes(p.name)
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => toggleProvince(p.name)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                    active
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-surface-alt text-text-secondary border-border hover:border-emerald-500 hover:text-emerald-600'
-                  }`}
-                >
-                  {active && <CheckCircle size={11} />}
-                  {p.name}
-                </button>
-              )
-            })}
-            {provinces.length === 0 && (
-              <p className="text-xs text-text-muted">Loading provinces...</p>
-            )}
-          </div>
-        </div>
-
-        {/* ── District Coverage — shown after provinces selected ── */}
-        {selectedProvinces.length > 0 && (
-          <div>
-            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
-              District Coverage
-            </label>
-            <p className="text-[11px] text-text-muted mb-3">
-              Select specific districts within your covered provinces.
-            </p>
-            {availableDistricts.length === 0 ? (
-              <div className="flex items-center gap-2 text-xs text-text-muted">
-                <Loader2 size={12} className="animate-spin" /> Loading districts...
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {availableDistricts.map(d => {
-                  const active = selectedDistricts.includes(d.name)
-                  return (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => toggleDistrict(d.name)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                        active
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                          : 'bg-surface-alt text-text-secondary border-border hover:border-blue-500 hover:text-blue-600'
-                      }`}
-                    >
-                      {active && <CheckCircle size={11} />}
-                      {d.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── Save ── */}
         <div className="flex items-center gap-3 pt-1 border-t border-border/40">

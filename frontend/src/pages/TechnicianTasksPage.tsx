@@ -60,41 +60,11 @@ export default function TechnicianTasksPage() {
     queryFn: async () => (await api.get<Technician>('/technicians/me')).data,
   })
 
-  // ── Fetch tasks ────────────────────────────────────────────────────────────
-  const { data: tasksPage, isLoading } = useQuery({
-    queryKey: ['my-tasks', statusFilter],
-    queryFn: async () => {
-      const params: Record<string, string | number> = { size: 100, sort: 'createdAt,desc' }
-      if (statusFilter) params.status = statusFilter
-      const { data } = await api.get<Page<RequestListItem>>('/requests', { params })
-      return data
-    },
-  })
-
-  const rawTasks = tasksPage?.content ?? []
-
-  // Sort: active tasks first (Resolved/Closed/Cancelled at bottom), then by
-  // priority (Critical → High → Medium → Low), then newest first within each tier.
-  const PRIORITY_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
-  const isDone = (t: { status: string }) =>
-    t.status === 'Resolved' || t.status === 'Closed' || t.status === 'Cancelled'
-
-  const tasks = [...rawTasks].sort((a, b) => {
-    // 1. Active before done
-    const doneA = isDone(a) ? 1 : 0
-    const doneB = isDone(b) ? 1 : 0
-    if (doneA !== doneB) return doneA - doneB
-    // 2. Priority order
-    const pA = PRIORITY_ORDER[a.finalPriority] ?? 4
-    const pB = PRIORITY_ORDER[b.finalPriority] ?? 4
-    if (pA !== pB) return pA - pB
-    // 3. Newest first within same priority
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  })
-
-  // ── Tab counts ─────────────────────────────────────────────────────────────
-  const { data: allTasksForCount = [] } = useQuery({
-    queryKey: ['my-tasks-counts'],
+  // ── Fetch ALL tasks once — filter and count on the frontend ───────────────
+  // A single source of truth avoids the counts/list desync that happens when
+  // two separate queries (one filtered, one unfiltered) get out of step.
+  const { data: allTasks = [], isLoading } = useQuery({
+    queryKey: ['my-tasks'],
     queryFn: async () => {
       const { data } = await api.get<Page<RequestListItem>>('/requests', {
         params: { size: 200, sort: 'createdAt,desc' },
@@ -103,10 +73,29 @@ export default function TechnicianTasksPage() {
     },
   })
 
-  const counts = allTasksForCount.reduce<Record<string, number>>((acc, t) => {
+  // ── Counts always derived from the full dataset ────────────────────────────
+  const counts = allTasks.reduce<Record<string, number>>((acc, t) => {
     acc[t.status] = (acc[t.status] ?? 0) + 1
     return acc
   }, {})
+
+  // ── Apply status filter on the frontend ───────────────────────────────────
+  const rawTasks = statusFilter
+    ? allTasks.filter(t => t.status === statusFilter)
+    : allTasks
+
+  // Sort: active tasks first (Resolved/Closed/Cancelled at bottom), then newest first.
+  const isDone = (t: { status: string }) =>
+    t.status === 'Resolved' || t.status === 'Closed' || t.status === 'Cancelled'
+
+  const tasks = [...rawTasks].sort((a, b) => {
+    // 1. Active before done
+    const doneA = isDone(a) ? 1 : 0
+    const doneB = isDone(b) ? 1 : 0
+    if (doneA !== doneB) return doneA - doneB
+    // 2. Newest first
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
 
   // ── Pursue mutation ────────────────────────────────────────────────────────
   const pursueMutation = useMutation({
@@ -115,7 +104,6 @@ export default function TechnicianTasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['my-tasks-counts'] })
       queryClient.invalidateQueries({ queryKey: ['technician-me'] })
     },
   })
@@ -127,7 +115,6 @@ export default function TechnicianTasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['my-tasks-counts'] })
       queryClient.invalidateQueries({ queryKey: ['technician-me'] })
       setCannotPursueId(null)
       setCannotPursueReason('')
@@ -155,7 +142,7 @@ export default function TechnicianTasksPage() {
               {profile
                 ? `${profile.currentWorkload} active · ${profile.maxWorkload} max capacity`
                 + (profile.isPursuing ? ' · Currently pursuing 1 request' : '')
-                : `${allTasksForCount.length} total tasks`}
+                : `${allTasks.length} total tasks`}
             </p>
           </div>
         </div>
@@ -214,7 +201,7 @@ export default function TechnicianTasksPage() {
       <div className="flex items-center gap-1.5 flex-wrap">
         <Filter size={13} className="text-text-muted mr-1 shrink-0" />
         {STATUS_TABS.map((tab) => {
-          const cnt = tab.value ? (counts[tab.value] ?? 0) : allTasksForCount.length
+          const cnt = tab.value ? (counts[tab.value] ?? 0) : allTasks.length
           return (
             <button
               key={tab.value}

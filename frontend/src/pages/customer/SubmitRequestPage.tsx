@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Upload, X, Brain, Loader2, AlertTriangle, Send, RotateCcw, Clock, Sparkles } from 'lucide-react'
+import { Upload, X, Brain, Loader2, AlertTriangle, Send, RotateCcw, Sparkles, Info } from 'lucide-react'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { PriorityBadge } from '@/components/ui/Badge'
@@ -63,9 +63,10 @@ export default function SubmitRequestPage() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
-  // Feature 3: pre-submit duplicate check — blocks submission when the customer
+  // Feature 3: pre-submit duplicate check — warns (not blocks) when the customer
   // already has an open request in the same category
   const [preSubmitDuplicates, setPreSubmitDuplicates] = useState<SimilarRequest[]>([])
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false)
   const duplicateTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
   const aiTimer = useRef<ReturnType<typeof setTimeout>>(null)
@@ -83,8 +84,10 @@ export default function SubmitRequestPage() {
   const triggerDuplicateCheck = useCallback((categoryId: string) => {
     if (!categoryId) {
       setPreSubmitDuplicates([])
+      setDuplicateAcknowledged(false)
       return
     }
+    setDuplicateAcknowledged(false)
     if (duplicateTimer.current) clearTimeout(duplicateTimer.current)
     duplicateTimer.current = setTimeout(async () => {
       try {
@@ -223,6 +226,7 @@ export default function SubmitRequestPage() {
     setAiVisible(false)
     setCategorySuggestions([])
     setPreSubmitDuplicates([])
+    setDuplicateAcknowledged(false)
   }
 
   const locationComplete = location.province && location.district && location.sector && location.cell
@@ -232,11 +236,6 @@ export default function SubmitRequestPage() {
     if (!locationComplete) return
     submitMutation.mutate()
   }
-
-  // SLA estimate labels
-  const slaHours = prediction?.priority
-    ? ({ Critical: 2, High: 8, Medium: 24, Low: 72 })[prediction.priority] ?? 24
-    : null
 
   return (
     <form onSubmit={handleSubmit}>
@@ -418,7 +417,7 @@ export default function SubmitRequestPage() {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="bg-white border border-primary/15 rounded-lg p-3.5 text-center">
                         <div className="mb-1">
                           <PriorityBadge priority={prediction.priority} />
@@ -439,15 +438,6 @@ export default function SubmitRequestPage() {
                             style={{ width: `${prediction.confidence * 100}%` }}
                           />
                         </div>
-                      </div>
-                      <div className="bg-white border border-primary/15 rounded-lg p-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1 mb-1">
-                          <Clock size={14} className="text-primary" />
-                          <span className="text-sm font-semibold text-text">
-                            {slaHours != null ? `~${slaHours}h` : '—'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-text-muted">SLA Target</div>
                       </div>
                     </div>
 
@@ -472,7 +462,7 @@ export default function SubmitRequestPage() {
                     )}
 
                     <div className="mt-2.5 px-3 py-2 bg-primary-light rounded-md text-xs text-text-muted">
-                      Models: TF-IDF + Logistic Regression + Random Forest + Naive Bayes (ensemble) · SLA based on priority
+                      AI Priority Analysis · Your request will be handled based on urgency and impact
                     </div>
                   </>
                 )}
@@ -493,18 +483,18 @@ export default function SubmitRequestPage() {
           </div>
         )}
 
-        {/* Feature 3: Pre-submit duplicate block */}
-        {preSubmitDuplicates.length > 0 && (
+        {/* Feature 3: Pre-submit duplicate warning (dismissable, not blocking) */}
+        {preSubmitDuplicates.length > 0 && !duplicateAcknowledged && (
           <div className="mt-5 bg-amber-50 border-2 border-amber-300 rounded-xl p-5">
             <div className="flex items-start gap-3 mb-3">
-              <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <Info size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-bold text-amber-900 mb-1">
-                  You already have a similar request open and in progress
+                  You have an open request in this category
                 </p>
                 <p className="text-sm text-amber-800">
-                  Please wait for your existing request to be resolved before submitting a new one.
-                  You can track its progress in <strong>My Requests</strong>.
+                  If this is the <strong>same issue</strong>, you can track it in <strong>My Requests</strong> instead of submitting again.
+                  If it's a <strong>different problem</strong>, you can still submit.
                 </p>
               </div>
             </div>
@@ -529,6 +519,23 @@ export default function SubmitRequestPage() {
                 </div>
               ))}
             </div>
+
+            <div className="flex gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => navigate('/my-requests')}
+                className="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
+              >
+                Go to My Requests
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateAcknowledged(true)}
+                className="px-4 py-2 border border-amber-300 text-amber-800 text-xs font-semibold rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                This is a different issue — continue
+              </button>
+            </div>
           </div>
         )}
 
@@ -536,7 +543,7 @@ export default function SubmitRequestPage() {
         <div className="flex gap-3 mt-5">
           <button
             type="submit"
-            disabled={submitMutation.isPending || !locationComplete || preSubmitDuplicates.length > 0}
+            disabled={submitMutation.isPending || !locationComplete || (preSubmitDuplicates.length > 0 && !duplicateAcknowledged)}
             className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg text-sm font-semibold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
