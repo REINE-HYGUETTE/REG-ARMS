@@ -29,15 +29,15 @@ function timeAgo(dateStr: string): string {
 }
 
 const statusSteps: { key: string; label: string }[] = [
-  { key: 'Submitted',   label: 'Submitted'   },
-  { key: 'Assigned',    label: 'Assigned'    },
-  { key: 'In_Progress', label: 'In Progress' },
-  { key: 'Resolved',    label: 'Resolved'    },
+  { key: 'Submitted',    label: 'Submitted'   },
+  { key: 'Assigned',     label: 'Assigned'    },
+  { key: 'In_Progress',  label: 'In Progress' },
+  { key: 'Resolved',     label: 'Resolved'    },
 ]
 
 function getStepIndex(status: RequestStatus, hasTechnician: boolean): number {
   if (status === 'Resolved' || status === 'Closed') return 4
-  if (status === 'In_Progress') return 3
+  if (status === 'In_Progress' || status === 'Problematic') return 3
   if (status === 'Assigned' || hasTechnician) return 2
   return 1
 }

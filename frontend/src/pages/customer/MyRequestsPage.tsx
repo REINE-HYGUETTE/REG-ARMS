@@ -8,12 +8,14 @@ import Spinner from '@/components/ui/Spinner'
 import type { Page, RequestListItem, RequestStatus } from '@/types'
 
 const statusFilters: { label: string; value: string }[] = [
-  { label: 'All', value: '' },
-  { label: 'Pending', value: 'Pending' },
-  { label: 'In Progress', value: 'In_Progress' },
-  { label: 'Resolved', value: 'Resolved' },
-  { label: 'Closed', value: 'Closed' },
-  { label: 'Cancelled', value: 'Cancelled' },
+  { label: 'All',         value: ''           },
+  { label: 'Pending',     value: 'Pending'    },
+  { label: 'Assigned',    value: 'Assigned'   },
+  { label: 'In Progress', value: 'In_Progress'},
+  { label: 'Problematic', value: 'Problematic'},
+  { label: 'Resolved',    value: 'Resolved'   },
+  { label: 'Closed',      value: 'Closed'     },
+  { label: 'Cancelled',   value: 'Cancelled'  },
 ]
 
 export default function MyRequestsPage() {
@@ -46,11 +48,13 @@ export default function MyRequestsPage() {
   })
 
   const statusDot: Record<RequestStatus, string> = {
-    Pending: 'bg-amber-500',
+    Pending:     'bg-amber-500',
+    Assigned:    'bg-violet-500',
     In_Progress: 'bg-blue-500',
-    Resolved: 'bg-green-600',
-    Closed: 'bg-gray-400',
-    Cancelled: 'bg-gray-300',
+    Problematic: 'bg-orange-500',
+    Resolved:    'bg-green-600',
+    Closed:      'bg-gray-400',
+    Cancelled:   'bg-gray-300',
   }
 
   return (
