@@ -6,6 +6,8 @@ public enum RequestStatus {
     Assigned,
     /** Technician clicked "Pursue" — actively working on the request. */
     In_Progress,
+    /** Technician reported a problem — tech stays assigned, staff reviews and resolves. */
+    Problematic,
     Resolved,
     Closed,
     Cancelled;

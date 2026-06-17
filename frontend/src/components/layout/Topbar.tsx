@@ -77,6 +77,7 @@ export default function Topbar({ title = '' }: { title?: string }) {
       return data.count
     },
     refetchInterval: 60_000,
+    enabled: !!userId,
   })
 
   // Avatar initials fallback

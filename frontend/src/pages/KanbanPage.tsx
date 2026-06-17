@@ -9,12 +9,14 @@ import type { RequestListItem, RequestStatus } from '@/types'
 
 // Closed and Cancelled are terminal states — they belong in CompletedPage, not the Kanban board
 const columns: { status: RequestStatus; label: string; color: string; headerBg: string; dot: string }[] = [
-  { status: 'Pending',     label: 'Pending',     color: 'text-amber-700',  headerBg: 'bg-amber-50',   dot: 'bg-amber-400'  },
-  { status: 'In_Progress', label: 'In Progress', color: 'text-blue-700',   headerBg: 'bg-blue-50',    dot: 'bg-blue-500'   },
-  { status: 'Resolved',    label: 'Resolved',    color: 'text-emerald-700',headerBg: 'bg-emerald-50', dot: 'bg-emerald-500'},
+  { status: 'Pending',     label: 'Pending',      color: 'text-amber-700',  headerBg: 'bg-amber-50',   dot: 'bg-amber-400'  },
+  { status: 'Assigned',    label: 'Assigned',     color: 'text-violet-700', headerBg: 'bg-violet-50',  dot: 'bg-violet-500' },
+  { status: 'In_Progress', label: 'In Progress',  color: 'text-blue-700',   headerBg: 'bg-blue-50',    dot: 'bg-blue-500'   },
+  { status: 'Problematic', label: 'Problematic',  color: 'text-orange-700', headerBg: 'bg-orange-50',  dot: 'bg-orange-500' },
+  { status: 'Resolved',    label: 'Resolved',     color: 'text-emerald-700',headerBg: 'bg-emerald-50', dot: 'bg-emerald-500'},
 ]
 
-const ACTIVE_STATUSES = 'Pending,In_Progress,Resolved'
+const ACTIVE_STATUSES = 'Pending,Assigned,In_Progress,Problematic,Resolved'
 
 export default function KanbanPage() {
   const queryClient = useQueryClient()

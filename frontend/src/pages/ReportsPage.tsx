@@ -6,6 +6,19 @@ import api from '@/lib/api'
 import Spinner from '@/components/ui/Spinner'
 import { PriorityBadge } from '@/components/ui/Badge'
 
+async function downloadFullReportPdf(period: string) {
+  const response = await api.get('/reports/export/full-report/pdf', {
+    params: { period },
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `reg-arms-report-${new Date().toISOString().slice(0, 10)}.pdf`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
 // Modern chart palette — no harsh reds in data viz
 const COLORS = {
   blue:   '#3B82F6',
@@ -149,6 +162,20 @@ function ExportCard({ type, label, desc }: { type: ExportType; label: string; de
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState('year')
+  const [printLoading, setPrintLoading] = useState(false)
+  const [printError, setPrintError] = useState('')
+
+  const handlePrint = async () => {
+    setPrintLoading(true)
+    setPrintError('')
+    try {
+      await downloadFullReportPdf(period)
+    } catch {
+      setPrintError('Failed to generate PDF. Please try again.')
+    } finally {
+      setPrintLoading(false)
+    }
+  }
 
   const { data: volumeData, isLoading: volLoading } = useQuery({
     queryKey: ['report-volume', period],
@@ -209,12 +236,19 @@ export default function ReportsPage() {
           <option value="quarter">This Quarter</option>
           <option value="year">This Year</option>
         </select>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {printError && (
+            <span className="flex items-center gap-1.5 text-xs text-red-600">
+              <AlertTriangle size={12} /> {printError}
+            </span>
+          )}
           <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-4 py-2 border-[1.5px] border-border rounded-xl text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+            onClick={handlePrint}
+            disabled={printLoading}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors disabled:opacity-60 shadow-sm"
           >
-            <Printer size={14} /> Print
+            {printLoading ? <Spinner className="h-4 w-4" /> : <Printer size={14} />}
+            {printLoading ? 'Generating PDF…' : 'Print Report'}
           </button>
         </div>
       </div>

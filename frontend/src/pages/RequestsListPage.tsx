@@ -149,6 +149,7 @@ export default function RequestsListPage() {
             <option value="Pending">Pending</option>
             <option value="Assigned">Assigned</option>
             <option value="In_Progress">In Progress</option>
+            <option value="Problematic">Problematic</option>
             <option value="Resolved">Resolved</option>
             <option value="Closed">Closed</option>
             <option value="Cancelled">Cancelled</option>

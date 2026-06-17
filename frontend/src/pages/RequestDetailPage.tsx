@@ -173,8 +173,10 @@ export default function RequestDetailPage() {
   })
 
   // ── Pursue-flow mutations ─────────────────────────────────────────────────
-  const [showCannotPursue, setShowCannotPursue] = useState(false)
-  const [cannotPursueReason, setCannotPursueReason] = useState('')
+  const [showCannotPursue,    setShowCannotPursue]    = useState(false)
+  const [cannotPursueReason,  setCannotPursueReason]  = useState('')
+  const [showResolveIssue,    setShowResolveIssue]    = useState(false)
+  const [resolveIssueNote,    setResolveIssueNote]    = useState('')
 
   const pursueMutation = useMutation({
     mutationFn: async () => { await api.post(`/requests/${id}/pursue`) },
@@ -197,6 +199,20 @@ export default function RequestDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['my-tasks'] })
       queryClient.invalidateQueries({ queryKey: ['my-tasks-counts'] })
       queryClient.invalidateQueries({ queryKey: ['technician-me'] })
+    },
+  })
+
+  const resolveProblematicMutation = useMutation({
+    mutationFn: async (note: string) => {
+      await api.post(`/requests/${id}/resolve-problematic`, { reason: note })
+    },
+    onSuccess: () => {
+      setShowResolveIssue(false)
+      setResolveIssueNote('')
+      queryClient.invalidateQueries({ queryKey: ['request', id] })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
     },
   })
 
@@ -271,10 +287,14 @@ export default function RequestDetailPage() {
   const isCritical        = request.finalPriority === 'Critical'
   const canCancel         = role === 'CUSTOMER' && request.status === 'Pending'
 
-  // Pursue-flow flags for the assigned technician
-  const isAssignedToMe = role === 'TECHNICIAN' && request.technicianId === userId
-  const canPursue      = isAssignedToMe && request.status === 'Assigned'
-  const canResolve     = isAssignedToMe && request.status === 'In_Progress'
+  // Pursue-flow flags
+  const isAssignedToMe    = role === 'TECHNICIAN' && request.technicianId === userId
+  const isProblematic     = request.status === 'Problematic'
+  const canPursue         = isAssignedToMe && request.status === 'Assigned'
+  const canReportProblem  = isAssignedToMe && (request.status === 'Assigned' || request.status === 'In_Progress')
+  const canResumeFromProb = isAssignedToMe && isProblematic
+  const canResolve        = isAssignedToMe && request.status === 'In_Progress'
+  const canResolveIssue   = (role === 'ADMIN' || role === 'STAFF') && isProblematic
 
   return (
     <div>
@@ -328,7 +348,7 @@ export default function RequestDetailPage() {
                 <XCircle size={13} /> Cancel Request
               </button>
             )}
-            {/* Technician pursue actions */}
+            {/* Technician: Pursue (Assigned only) */}
             {canPursue && (
               <button
                 onClick={() => pursueMutation.mutate()}
@@ -341,15 +361,36 @@ export default function RequestDetailPage() {
                 {isCritical ? 'Pursue Now — Critical' : 'Pursue'}
               </button>
             )}
-            {canPursue && (
+            {/* Technician: Report Problem (Assigned or In_Progress) */}
+            {canReportProblem && (
               <button
                 onClick={() => setShowCannotPursue(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-red-300 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-orange-300 text-orange-600 text-xs font-semibold hover:bg-orange-50 transition-colors"
               >
-                <XCircle size={12} /> Cannot Pursue
+                <AlertTriangle size={12} /> Report Problem
               </button>
             )}
-            {/* Technician resolve button — shown while In_Progress */}
+            {/* Technician: Continue Pursuing (Problematic — after staff resolves) */}
+            {canResumeFromProb && (
+              <button
+                onClick={() => pursueMutation.mutate()}
+                disabled={pursueMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {pursueMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+                Continue Pursuing
+              </button>
+            )}
+            {/* Staff/Admin: Resolve Issue (Problematic) */}
+            {canResolveIssue && (
+              <button
+                onClick={() => setShowResolveIssue(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 transition-colors"
+              >
+                <CheckCircle size={12} /> Resolve Issue
+              </button>
+            )}
+            {/* Technician: Mark Resolved (In_Progress) */}
             {canResolve && (
               <button
                 onClick={() => statusMutation.mutate('Resolved')}
@@ -1051,7 +1092,7 @@ export default function RequestDetailPage() {
         </div>
       )}
 
-      {/* ── Cannot-Pursue modal ── */}
+      {/* ── Report Problem modal ── */}
       {showCannotPursue && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -1062,30 +1103,76 @@ export default function RequestDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-3">
-              <XCircle size={20} className="text-red-500" />
-              <h3 className="text-sm font-bold text-text">Cannot Pursue This Request?</h3>
+              <AlertTriangle size={20} className="text-orange-500" />
+              <h3 className="text-sm font-bold text-text">Report a Problem</h3>
             </div>
             <p className="text-xs text-text-muted mb-4">
-              The request will be returned to Pending and Staff will be notified to re-route it.
+              The request will be marked <strong>Problematic</strong> and staff will be notified.
+              You stay assigned — once staff resolves the issue you can continue pursuing.
             </p>
             <textarea
               value={cannotPursueReason}
               onChange={(e) => setCannotPursueReason(e.target.value)}
-              placeholder="Reason (optional) — e.g. wrong location, emergency..."
+              placeholder="Describe the problem — e.g. access denied, wrong location, equipment missing..."
               rows={3}
-              className="w-full px-3 py-2 border border-border rounded-lg text-xs bg-surface-alt focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none resize-none mb-4"
+              className="w-full px-3 py-2 border border-border rounded-lg text-xs bg-surface-alt focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none resize-none mb-4"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => cannotPursueMutation.mutate(cannotPursueReason)}
                 disabled={cannotPursueMutation.isPending}
-                className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors"
               >
-                {cannotPursueMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
-                Confirm — Return to Staff
+                {cannotPursueMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+                Report Problem
               </button>
               <button
                 onClick={() => { setShowCannotPursue(false); setCannotPursueReason('') }}
+                className="px-4 py-2 border border-border rounded-lg text-xs text-text-secondary hover:border-primary hover:text-primary transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Resolve Issue modal (Staff / Admin) ── */}
+      {showResolveIssue && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowResolveIssue(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle size={20} className="text-emerald-500" />
+              <h3 className="text-sm font-bold text-text">Resolve Issue</h3>
+            </div>
+            <p className="text-xs text-text-muted mb-4">
+              The request will return to <strong>Assigned</strong> and the technician will be
+              notified that the issue is resolved and they can continue pursuing.
+            </p>
+            <textarea
+              value={resolveIssueNote}
+              onChange={(e) => setResolveIssueNote(e.target.value)}
+              placeholder="Resolution note (optional) — e.g. access granted, issue clarified..."
+              rows={3}
+              className="w-full px-3 py-2 border border-border rounded-lg text-xs bg-surface-alt focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none resize-none mb-4"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => resolveProblematicMutation.mutate(resolveIssueNote)}
+                disabled={resolveProblematicMutation.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {resolveProblematicMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                Confirm — Notify Technician
+              </button>
+              <button
+                onClick={() => { setShowResolveIssue(false); setResolveIssueNote('') }}
                 className="px-4 py-2 border border-border rounded-lg text-xs text-text-secondary hover:border-primary hover:text-primary transition-colors"
               >
                 Cancel

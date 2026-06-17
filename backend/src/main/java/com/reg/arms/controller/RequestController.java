@@ -111,8 +111,8 @@ public class RequestController {
     }
 
     /**
-     * Technician declines an Assigned request — it returns to Pending for re-routing.
-     * Staff and Admin are notified immediately.
+     * Technician reports a problem — status moves to Problematic.
+     * Tech stays assigned; staff is notified to review and resolve.
      */
     @PostMapping("/{id}/cannot-pursue")
     @PreAuthorize("hasRole('TECHNICIAN')")
@@ -122,7 +122,22 @@ public class RequestController {
             @AuthenticationPrincipal UserPrincipal principal) {
         String reason = body != null ? body.getReason() : null;
         requestService.cannotPursue(id, principal, reason);
-        return ResponseEntity.ok(ApiResponse.success("Request returned for re-routing. Staff has been notified."));
+        return ResponseEntity.ok(ApiResponse.success("Problem reported. Staff has been notified and will resolve the issue."));
+    }
+
+    /**
+     * Staff resolves a Problematic request — status returns to Assigned so the
+     * technician can continue pursuing.
+     */
+    @PostMapping("/{id}/resolve-problematic")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse> resolveProblematic(
+            @PathVariable Long id,
+            @RequestBody(required = false) com.reg.arms.dto.request.CannotPursueRequest body,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String note = body != null ? body.getReason() : null;
+        requestService.resolveProblematic(id, principal, note);
+        return ResponseEntity.ok(ApiResponse.success("Issue resolved. Technician has been notified to continue."));
     }
 
     @PatchMapping("/{id}/priority")

@@ -460,22 +460,22 @@ public class RequestService {
     }
 
     /**
-     * Technician declines the assigned request and sends it back for re-routing.
+     * Technician reports a problem with an Assigned or In_Progress request.
      *
      * <ul>
-     *   <li>Returns the request to {@code Pending}.</li>
-     *   <li>Clears the assigned technician.</li>
-     *   <li>Releases the workload slot.</li>
-     *   <li>Notifies Staff and Admin for manual intervention.</li>
+     *   <li>Sets status → {@code Problematic}.</li>
+     *   <li>Technician stays assigned — they may continue once staff resolves the issue.</li>
+     *   <li>Notifies Staff and Admin to review and act.</li>
      * </ul>
      */
     @Transactional
     public void cannotPursue(Long requestId, UserPrincipal principal, String reason) {
         Request request = findRequestOrThrow(requestId);
 
-        if (request.getStatus() != RequestStatus.Assigned) {
+        if (request.getStatus() != RequestStatus.Assigned
+                && request.getStatus() != RequestStatus.In_Progress) {
             throw new BadRequestException(
-                "Cannot Pursue is only available for Assigned requests. Current status: "
+                "Cannot Pursue is only available for Assigned or In Progress requests. Current status: "
                 + request.getStatus().toDbValue());
         }
         if (request.getAssignedTechnician() == null
@@ -483,27 +483,64 @@ public class RequestService {
             throw new BadRequestException("You are not the assigned technician for this request.");
         }
 
-        User previousTech = request.getAssignedTechnician();
-        request.setAssignedTechnician(null);
-        request.setStatus(RequestStatus.Pending);
+        String previousStatus = request.getStatus().toDbValue();
+        request.setStatus(RequestStatus.Problematic);
         requestRepository.save(request);
 
-        technicianService.releaseWorkload(previousTech.getId());
+        String reasonNote = (reason != null && !reason.isBlank()) ? " Reason: " + reason : "";
+        String techName   = request.getAssignedTechnician().getFullName();
 
-        String reasonNote = (reason != null && !reason.isBlank())
-                ? " Reason: " + reason : "";
         notificationService.notifyStaffAndAdmins(request, NotificationType.URGENT_ALERT,
-                "Re-routing Required: " + request.getRequestCode(),
-                previousTech.getFullName() + " cannot pursue request "
+                "Problem Reported: " + request.getRequestCode(),
+                techName + " reported a problem with request "
                 + request.getRequestCode() + " (" + request.getTitle() + ")."
-                + reasonNote + " Manual re-assignment required.");
+                + reasonNote + " The technician remains assigned — please review and resolve.");
 
         activityLogService.logRequest(
                 userRepository.findById(principal.getId()).orElse(null),
-                request, "CANNOT_PURSUE",
-                "Technician declined — request returned to Pending for re-routing"
-                + (reason != null && !reason.isBlank() ? ". Reason: " + reason : ""),
-                previousTech.getFullName(), null);
+                request, "PROBLEMATIC",
+                "Technician reported a problem" + (reason != null && !reason.isBlank() ? ": " + reason : ""),
+                previousStatus, "Problematic");
+    }
+
+    /**
+     * Staff resolves the problem flag on a Problematic request.
+     *
+     * <ul>
+     *   <li>Sets status back to {@code Assigned} so the technician can pursue again.</li>
+     *   <li>Notifies the assigned technician that they can continue.</li>
+     * </ul>
+     */
+    @Transactional
+    public void resolveProblematic(Long requestId, UserPrincipal principal, String note) {
+        Request request = findRequestOrThrow(requestId);
+
+        if (request.getStatus() != RequestStatus.Problematic) {
+            throw new BadRequestException(
+                "Resolve is only available for Problematic requests. Current status: "
+                + request.getStatus().toDbValue());
+        }
+
+        request.setStatus(RequestStatus.Assigned);
+        requestRepository.save(request);
+
+        String noteText = (note != null && !note.isBlank()) ? " Note: " + note : "";
+
+        if (request.getAssignedTechnician() != null) {
+            notificationService.notifyUser(request.getAssignedTechnician(), request,
+                    NotificationType.STATUS_UPDATE,
+                    "Issue Resolved — Please Continue",
+                    "The issue on request " + request.getRequestCode()
+                    + " (" + request.getTitle() + ") has been resolved by staff."
+                    + noteText + " You can now pursue this request.");
+        }
+
+        activityLogService.logRequest(
+                userRepository.findById(principal.getId()).orElse(null),
+                request, "RESOLVE_PROBLEMATIC",
+                "Staff resolved the reported problem — request returned to Assigned"
+                + (note != null && !note.isBlank() ? ". Note: " + note : ""),
+                "Problematic", "Assigned");
     }
 
     /**

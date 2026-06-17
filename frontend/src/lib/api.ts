@@ -13,13 +13,21 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+let redirectingToLogin = false
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (
+      error.response?.status === 401 &&
+      !window.location.pathname.includes('/login') &&
+      !redirectingToLogin
+    ) {
+      redirectingToLogin = true
       localStorage.removeItem('reg_token')
       localStorage.removeItem('reg_user')
       window.location.href = '/login'
+      setTimeout(() => { redirectingToLogin = false }, 3000)
     }
     return Promise.reject(error)
   }

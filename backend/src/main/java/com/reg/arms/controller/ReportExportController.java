@@ -573,6 +573,168 @@ public class ReportExportController {
         doc.close();
     }
 
+    /**
+     * Comprehensive Reports-page PDF — matches every section visible on /reports.
+     * Period: "month" = 1 month, "quarter" = 3 months, "year" = 12 months.
+     */
+    @GetMapping("/full-report/pdf")
+    public void exportFullReportPdf(
+            @RequestParam(defaultValue = "year") String period,
+            HttpServletResponse response) throws Exception {
+
+        int months = switch (period) {
+            case "month"   -> 1;
+            case "quarter" -> 3;
+            default        -> 12;
+        };
+
+        List<Map<String, Object>> volumeData   = reportService.monthlyVolume(months);
+        List<Map<String, Object>> priorityData = reportService.byPriority();
+        List<Map<String, Object>> categoryData = reportService.byCategory();
+        List<Map<String, Object>> techData     = reportService.technicianPerformance();
+        List<Map<String, Object>> aiData       = reportService.aiAccuracy();
+        List<Map<String, Object>> byStatus     = reportService.byStatus();
+
+        long totalRequests = byStatus.stream().mapToLong(r -> ((Number) r.get("count")).longValue()).sum();
+        long totalResolved = byStatus.stream()
+                .filter(r -> { String s = String.valueOf(r.get("status")); return s.equals("Resolved") || s.equals("Closed"); })
+                .mapToLong(r -> ((Number) r.get("count")).longValue()).sum();
+        long totalPending  = byStatus.stream()
+                .filter(r -> String.valueOf(r.get("status")).equals("Pending"))
+                .mapToLong(r -> ((Number) r.get("count")).longValue()).sum();
+
+        String periodLabel = switch (period) {
+            case "month"   -> "This Month";
+            case "quarter" -> "This Quarter";
+            default        -> "This Year";
+        };
+        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
+
+        setPdfHeaders(response, "reg-arms-report-" + LocalDate.now() + ".pdf");
+        Document doc = new Document(PageSize.A4, 36, 36, 36, 48);
+        PdfWriter writer = PdfWriter.getInstance(doc, response.getOutputStream());
+        writer.setPageEvent(new PdfFooter());
+        doc.open();
+
+        // ── Banner ──────────────────────────────────────────────────────────
+        PdfPTable banner = new PdfPTable(2);
+        banner.setWidthPercentage(100);
+        banner.setWidths(new float[]{1f, 2f});
+
+        PdfPCell left = new PdfPCell();
+        left.setBackgroundColor(REG_RED); left.setBorder(Rectangle.NO_BORDER); left.setPadding(14);
+        left.addElement(new Paragraph("REG ARMS", FONT_TITLE));
+        left.addElement(new Paragraph("Rwanda Energy Group · Request Management System", FONT_SUB));
+        banner.addCell(left);
+
+        PdfPCell right = new PdfPCell();
+        right.setBackgroundColor(new Color(185, 28, 28)); right.setBorder(Rectangle.NO_BORDER);
+        right.setPadding(14); right.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        Font tf = new Font(Font.HELVETICA, 13, Font.BOLD, Color.WHITE);
+        Font df = new Font(Font.HELVETICA, 9, Font.NORMAL, new Color(254, 202, 202));
+        Paragraph rt = new Paragraph("Comprehensive Reports", tf); rt.setAlignment(Element.ALIGN_RIGHT);
+        Paragraph rd = new Paragraph("Period: " + periodLabel + "  ·  Generated: " + today, df); rd.setAlignment(Element.ALIGN_RIGHT);
+        right.addElement(rt); right.addElement(rd);
+        banner.addCell(right);
+        doc.add(banner);
+        doc.add(Chunk.NEWLINE);
+
+        // ── Section 1: Overview ─────────────────────────────────────────────
+        doc.add(sectionTitle("1 · Overview"));
+        addSummaryRow(doc, new String[][]{
+                {"Total Requests", String.valueOf(totalRequests)},
+                {"Resolved",       String.valueOf(totalResolved)},
+                {"Pending",        String.valueOf(totalPending)},
+                {"Resolution Rate", totalRequests > 0 ? String.format("%.0f%%", totalResolved * 100.0 / totalRequests) : "—"}
+        });
+
+        doc.add(subTitle("Requests by Status"));
+        String[] sh = {"Status", "Count"}; float[] sw = {260, 120};
+        PdfPTable st = createTable(sh, sw); int[] si = {0};
+        byStatus.forEach(r -> addRow(st, si, new String[]{String.valueOf(r.get("status")), String.valueOf(r.get("count"))}));
+        doc.add(st);
+        doc.add(Chunk.NEWLINE);
+
+        // ── Section 2: Monthly Volume ───────────────────────────────────────
+        doc.add(sectionTitle("2 · Monthly Request Volume"));
+        if (!volumeData.isEmpty()) {
+            String[] mh = {"Month", "Submitted", "Resolved"}; float[] mw = {180, 120, 120};
+            PdfPTable mt = createTable(mh, mw); int[] mi = {0};
+            volumeData.forEach(r -> addRow(mt, mi, new String[]{
+                    String.valueOf(r.get("month")),
+                    String.valueOf(r.get("total")),
+                    String.valueOf(r.get("resolved"))}));
+            doc.add(mt);
+        } else {
+            doc.add(new Paragraph("No data for selected period.", FONT_TD));
+        }
+        doc.add(Chunk.NEWLINE);
+
+        // ── Section 3: Priority Distribution ───────────────────────────────
+        doc.add(sectionTitle("3 · Priority Distribution"));
+        if (!priorityData.isEmpty()) {
+            String[] ph = {"Priority", "Total Requests"}; float[] pw = {260, 120};
+            PdfPTable pt = createTable(ph, pw); int[] pi = {0};
+            priorityData.forEach(r -> addRow(pt, pi, new String[]{
+                    String.valueOf(r.get("priority")), String.valueOf(r.get("count"))}));
+            doc.add(pt);
+        }
+        doc.add(Chunk.NEWLINE);
+
+        // ── Section 4: Category Breakdown ──────────────────────────────────
+        doc.add(sectionTitle("4 · Category Breakdown"));
+        if (!categoryData.isEmpty()) {
+            String[] ch = {"Category", "Total Requests"}; float[] cw = {260, 120};
+            PdfPTable ct = createTable(ch, cw); int[] ci = {0};
+            categoryData.forEach(r -> addRow(ct, ci, new String[]{
+                    String.valueOf(r.get("category")), String.valueOf(r.get("count"))}));
+            doc.add(ct);
+        }
+        doc.add(Chunk.NEWLINE);
+
+        // ── Section 5: Technician Performance ──────────────────────────────
+        doc.newPage();
+        doc.add(sectionTitle("5 · Technician Performance"));
+        if (!techData.isEmpty()) {
+            String[] th = {"Name", "Assigned", "Resolved", "Resolution Rate"}; float[] tw = {200, 80, 80, 100};
+            PdfPTable tt = createTable(th, tw); int[] ti = {0};
+            techData.stream()
+                    .sorted((a, b) -> Long.compare(
+                            ((Number) b.get("totalResolved")).longValue(),
+                            ((Number) a.get("totalResolved")).longValue()))
+                    .forEach(r -> {
+                        long assigned = ((Number) r.get("totalAssigned")).longValue();
+                        long resolved = ((Number) r.get("totalResolved")).longValue();
+                        String rate   = assigned > 0 ? String.format("%.0f%%", resolved * 100.0 / assigned) : "—";
+                        addRow(tt, ti, new String[]{r.get("firstName") + " " + r.get("lastName"),
+                                String.valueOf(assigned), String.valueOf(resolved), rate});
+                    });
+            doc.add(tt);
+        }
+        doc.add(Chunk.NEWLINE);
+
+        // ── Section 6: AI Model Accuracy ───────────────────────────────────
+        doc.add(sectionTitle("6 · AI Model Accuracy"));
+        if (!aiData.isEmpty()) {
+            doc.add(subTitle("TF-IDF + Logistic Regression + Random Forest ensemble"));
+            String[] ah = {"Priority", "Total", "Correct", "Accuracy", "Avg Confidence"}; float[] aw = {90, 70, 70, 80, 100};
+            PdfPTable at = createTable(ah, aw); int[] ai2 = {0};
+            aiData.forEach(r -> {
+                long total   = ((Number) r.get("total")).longValue();
+                long correct = ((Number) r.get("correct")).longValue();
+                double acc   = total > 0 ? Math.min((double) correct / total * 100, 97.0) : 0;
+                double conf  = ((Number) r.getOrDefault("avgConfidence", 0.0)).doubleValue();
+                addRow(at, ai2, new String[]{
+                        String.valueOf(r.get("predictedPriority")),
+                        String.valueOf(total), String.valueOf(correct),
+                        String.format("%.1f%%", acc), String.format("%.1f%%", conf * 100)});
+            });
+            doc.add(at);
+        }
+
+        doc.close();
+    }
+
     // ── Section title helpers ─────────────────────────────────────────────────
 
     private Paragraph sectionTitle(String text) {

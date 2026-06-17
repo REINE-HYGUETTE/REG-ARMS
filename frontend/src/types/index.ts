@@ -2,8 +2,9 @@ export type UserRole = 'ADMIN' | 'STAFF' | 'TECHNICIAN' | 'CUSTOMER'
 export type PriorityLevel = 'Low' | 'Medium' | 'High' | 'Critical'
 export type RequestStatus =
   | 'Pending'
-  | 'Assigned'     // Routed to a technician — waiting for Pursue click
-  | 'In_Progress'  // Technician clicked Pursue — actively working
+  | 'Assigned'      // Routed to a technician — waiting for Pursue click
+  | 'In_Progress'   // Technician clicked Pursue — actively working
+  | 'Problematic'   // Tech reported a problem — staff reviews, tech stays assigned
   | 'Resolved'
   | 'Closed'
   | 'Cancelled'

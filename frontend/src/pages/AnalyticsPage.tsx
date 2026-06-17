@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
   if (isLoading) return <div className="flex justify-center py-16"><Spinner /></div>
 
   const statusColors: Record<string, string> = {
-    Pending: AMBER, In_Progress: BLUE, Resolved: GREEN, Closed: '#94a3b8',
+    Pending: AMBER, In_Progress: BLUE, Problematic: '#f97316', Resolved: GREEN, Closed: '#94a3b8',
   }
 
   const confusionMatrix  = buildMatrix(confusionRaw)

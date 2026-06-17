@@ -39,11 +39,12 @@ function SlaChip({ slaStatus, slaDeadline }: { slaStatus?: string; slaDeadline?:
 }
 
 const STATUS_TABS = [
-  { value: '',            label: 'All'         },
-  { value: 'Assigned',    label: 'Assigned'    },
-  { value: 'In_Progress', label: 'In Progress' },
-  { value: 'Resolved',    label: 'Resolved'    },
-  { value: 'Closed',      label: 'Closed'      },
+  { value: '',             label: 'All'         },
+  { value: 'Assigned',     label: 'Assigned'    },
+  { value: 'In_Progress',  label: 'In Progress' },
+  { value: 'Problematic',  label: 'Problematic' },
+  { value: 'Resolved',     label: 'Resolved'    },
+  { value: 'Closed',       label: 'Closed'      },
 ]
 
 export default function TechnicianTasksPage() {
@@ -123,9 +124,10 @@ export default function TechnicianTasksPage() {
 
   if (isLoading) return <div className="flex justify-center py-16"><Spinner /></div>
 
-  const assigned   = counts['Assigned']    ?? 0
-  const inProgress = counts['In_Progress'] ?? 0
-  const resolved   = (counts['Resolved'] ?? 0) + (counts['Closed'] ?? 0)
+  const assigned      = counts['Assigned']    ?? 0
+  const inProgress    = counts['In_Progress'] ?? 0
+  const problematic   = counts['Problematic'] ?? 0
+  const resolved      = (counts['Resolved'] ?? 0) + (counts['Closed'] ?? 0)
 
   return (
     <div className="w-full space-y-5">
@@ -182,10 +184,11 @@ export default function TechnicianTasksPage() {
       </div>
 
       {/* ── Quick stats ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {[
           { label: 'Assigned',    value: assigned,    color: 'text-amber-600',   bg: 'bg-amber-50'   },
           { label: 'In Progress', value: inProgress,  color: 'text-blue-600',    bg: 'bg-blue-50'    },
+          { label: 'Problematic', value: problematic, color: 'text-orange-600',  bg: 'bg-orange-50'  },
           { label: 'Resolved',    value: resolved,    color: 'text-emerald-600', bg: 'bg-emerald-50' },
         ].map(({ label, value, color, bg }) => (
           <div key={label} className="bg-white rounded-2xl border border-border/60 p-4 shadow-sm flex items-center gap-3">
@@ -237,22 +240,37 @@ export default function TechnicianTasksPage() {
       ) : (
         <div className="space-y-2.5">
           {tasks.map((task) => {
-            const isCritical  = task.finalPriority === 'Critical'
-            const isAssigned  = task.status === 'Assigned'
-            const isPursuing  = task.status === 'In_Progress'
-            const isDone      = task.status === 'Resolved' || task.status === 'Closed'
-            const borderColor = priorityBorder[task.finalPriority] ?? 'border-l-gray-200'
+            const isCritical      = task.finalPriority === 'Critical'
+            const isAssigned      = task.status === 'Assigned'
+            const isPursuing      = task.status === 'In_Progress'
+            const isProblematic   = task.status === 'Problematic'
+            const isDone          = task.status === 'Resolved' || task.status === 'Closed'
+            const canReportProblem = isAssigned || isPursuing
+            const borderColor     = isProblematic
+              ? 'border-l-orange-500'
+              : priorityBorder[task.finalPriority] ?? 'border-l-gray-200'
 
             return (
               <div
                 key={task.id}
                 className={`bg-white rounded-xl border border-border/60 border-l-[3px] shadow-sm hover:shadow-md transition-all ${borderColor}
                   ${isDone ? 'opacity-70' : ''}
-                  ${isCritical && !isDone ? 'ring-1 ring-red-200 bg-red-50/20' : ''}
+                  ${isCritical && !isDone && !isProblematic ? 'ring-1 ring-red-200 bg-red-50/20' : ''}
+                  ${isProblematic ? 'ring-1 ring-orange-200 bg-orange-50/20' : ''}
                 `}
               >
+                {/* Problematic alert banner */}
+                {isProblematic && (
+                  <div className="flex items-center gap-2 px-4 py-1.5 bg-orange-500 rounded-t-xl">
+                    <AlertTriangle size={11} className="text-white" />
+                    <span className="text-[11px] font-bold text-white tracking-wide uppercase">
+                      Problematic — Awaiting Staff Resolution
+                    </span>
+                  </div>
+                )}
+
                 {/* Critical alert banner */}
-                {isCritical && !isDone && (
+                {isCritical && !isDone && !isProblematic && (
                   <div className="flex items-center gap-2 px-4 py-1.5 bg-red-600 rounded-t-xl">
                     <Zap size={11} className="text-white" />
                     <span className="text-[11px] font-bold text-white tracking-wide uppercase">
@@ -265,10 +283,12 @@ export default function TechnicianTasksPage() {
                 <div className="flex items-start gap-4 p-4">
                   <div className="shrink-0 pt-0.5">
                     {isDone
-                      ? <CheckCircle2 size={18} className="text-emerald-500" />
+                      ? <CheckCircle2  size={18} className="text-emerald-500" />
+                      : isProblematic
+                      ? <AlertTriangle size={18} className="text-orange-500" />
                       : isPursuing
-                      ? <PlayCircle   size={18} className="text-blue-500" />
-                      : <Clock        size={18} className="text-amber-400" />}
+                      ? <PlayCircle    size={18} className="text-blue-500" />
+                      : <Clock         size={18} className="text-amber-400" />}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -294,6 +314,11 @@ export default function TechnicianTasksPage() {
                             In Progress
                           </span>
                         )}
+                        {isProblematic && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">
+                            Problematic
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] text-text-muted whitespace-nowrap shrink-0">
                         {new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -313,15 +338,13 @@ export default function TechnicianTasksPage() {
 
                 {/* Action bar */}
                 <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border/40">
-                  {/* Pursue button — only for Assigned status */}
+                  {/* Pursue — Assigned only */}
                   {isAssigned && (
                     <button
                       onClick={() => pursueMutation.mutate(task.id)}
                       disabled={pursueMutation.isPending}
                       className={`flex items-center gap-1.5 px-3.5 py-1.5 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm ${
-                        isCritical
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : 'bg-blue-600 hover:bg-blue-700'
+                        isCritical ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
                       }`}
                     >
                       {pursueMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={13} />}
@@ -329,14 +352,21 @@ export default function TechnicianTasksPage() {
                     </button>
                   )}
 
-                  {/* Cannot Pursue — only for Assigned status */}
-                  {isAssigned && (
+                  {/* Report Problem — Assigned or In Progress */}
+                  {canReportProblem && (
                     <button
                       onClick={() => setCannotPursueId(task.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors"
                     >
-                      <XCircle size={12} /> Cannot Pursue
+                      <AlertTriangle size={12} /> Report Problem
                     </button>
+                  )}
+
+                  {/* Problematic — waiting on staff */}
+                  {isProblematic && (
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-orange-600">
+                      <AlertTriangle size={13} /> Waiting for staff to resolve
+                    </span>
                   )}
 
                   {isDone && (
@@ -371,28 +401,28 @@ export default function TechnicianTasksPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-3">
-              <XCircle size={20} className="text-red-500" />
-              <h3 className="text-sm font-bold text-text">Cannot Pursue This Request?</h3>
+              <AlertTriangle size={20} className="text-orange-500" />
+              <h3 className="text-sm font-bold text-text">Report a Problem</h3>
             </div>
             <p className="text-xs text-text-muted mb-4">
-              The request will be returned to Pending and Staff will be notified to re-route it.
-              Optionally tell us why so Staff can reassign appropriately.
+              The request will be marked as <strong>Problematic</strong> and staff will be notified
+              to investigate. You stay assigned — once staff resolves the issue you can continue pursuing.
             </p>
             <textarea
               value={cannotPursueReason}
               onChange={(e) => setCannotPursueReason(e.target.value)}
-              placeholder="Reason (optional) — e.g. wrong location, emergency..."
+              placeholder="Describe the problem — e.g. access denied, wrong location, equipment missing..."
               rows={3}
-              className="w-full px-3 py-2 border border-border rounded-lg text-xs bg-surface-alt focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none resize-none mb-4"
+              className="w-full px-3 py-2 border border-border rounded-lg text-xs bg-surface-alt focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none resize-none mb-4"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => cannotPursueMutation.mutate({ id: cannotPursueId, reason: cannotPursueReason })}
                 disabled={cannotPursueMutation.isPending}
-                className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors"
               >
-                {cannotPursueMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
-                Confirm — Return to Staff
+                {cannotPursueMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+                Report Problem
               </button>
               <button
                 onClick={() => { setCannotPursueId(null); setCannotPursueReason('') }}

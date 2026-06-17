@@ -11,12 +11,13 @@ const priorityStyles: Record<PriorityLevel, { pill: string; dot: string }> = {
 
 /* ── Status ────────────────────────────────────────────── */
 const statusStyles: Record<RequestStatus, { pill: string; dot: string }> = {
-  Pending:     { pill: 'bg-amber-50  text-amber-700  ring-1 ring-amber-200',   dot: 'bg-amber-400'  },
-  Assigned:    { pill: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200',  dot: 'bg-violet-500' },
-  In_Progress: { pill: 'bg-blue-50   text-blue-700   ring-1 ring-blue-200',    dot: 'bg-blue-500'   },
-  Resolved:    { pill: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot: 'bg-emerald-500' },
-  Closed:      { pill: 'bg-slate-100 text-slate-600  ring-1 ring-slate-200',   dot: 'bg-slate-400'  },
-  Cancelled:   { pill: 'bg-gray-100  text-gray-500   ring-1 ring-gray-200',    dot: 'bg-gray-400'   },
+  Pending:      { pill: 'bg-amber-50  text-amber-700  ring-1 ring-amber-200',   dot: 'bg-amber-400'  },
+  Assigned:     { pill: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200',  dot: 'bg-violet-500' },
+  In_Progress:  { pill: 'bg-blue-50   text-blue-700   ring-1 ring-blue-200',    dot: 'bg-blue-500'   },
+  Problematic:  { pill: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',  dot: 'bg-orange-500' },
+  Resolved:     { pill: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot: 'bg-emerald-500' },
+  Closed:       { pill: 'bg-slate-100 text-slate-600  ring-1 ring-slate-200',   dot: 'bg-slate-400'  },
+  Cancelled:    { pill: 'bg-gray-100  text-gray-500   ring-1 ring-gray-200',    dot: 'bg-gray-400'   },
 }
 
 /* ── Role ──────────────────────────────────────────────── */
