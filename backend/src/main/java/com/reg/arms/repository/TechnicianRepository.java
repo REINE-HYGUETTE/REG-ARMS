@@ -10,6 +10,9 @@ public interface TechnicianRepository extends JpaRepository<Technician, Long> {
 
     Optional<Technician> findByUserId(Long userId);
 
+    /** Used to generate a collision-free employee id when creating a technician. */
+    boolean existsByEmployeeId(String employeeId);
+
     List<Technician> findByIsAvailableTrueOrderByCurrentWorkloadAsc();
 
     /** All technicians whose user account belongs to a specific district (case-insensitive). */

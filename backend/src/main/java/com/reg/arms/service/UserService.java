@@ -195,7 +195,14 @@ public class UserService {
 
         // ── Auto-create Technician profile ────────────────────────────────────
         if (UserRole.TECHNICIAN.equals(user.getRole())) {
-            String employeeId = String.format("EMP%03d", technicianRepository.count() + 1);
+            // Derive the employee id from the user's unique PK and bump on the
+            // rare chance of a clash (e.g. a legacy count-based id). Using count()
+            // here was unsafe — deletions/gaps made it regenerate existing ids.
+            long seq = user.getId();
+            String employeeId = String.format("EMP%03d", seq);
+            while (technicianRepository.existsByEmployeeId(employeeId)) {
+                employeeId = String.format("EMP%03d", ++seq);
+            }
             Technician tech = Technician.builder()
                     .user(user)
                     .employeeId(employeeId)
