@@ -57,6 +57,10 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}
   ai:
     api-url: ${AI_API_URL:http://localhost:5000}
+  email:
+    # When set, email goes through Brevo's HTTPS API (for hosts that block SMTP).
+    # When blank, the app uses SMTP (spring.mail.*) — local dev default.
+    brevo-api-key: ${BREVO_API_KEY:}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
     allowed-extensions: jpg,jpeg,png,pdf,doc,docx

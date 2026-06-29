@@ -5,10 +5,15 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -16,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class EmailService {
 
     private final JavaMailSender mailSender;
+    private final RestClient restClient = RestClient.create();
 
     @Value("${spring.mail.username}")
     private String fromEmail;
@@ -25,6 +31,15 @@ public class EmailService {
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
+
+    /**
+     * When set, email is sent through Brevo's HTTPS API instead of SMTP.
+     * This is required on hosts (e.g. Render) that block outbound SMTP ports.
+     * When blank, we fall back to the configured JavaMailSender (SMTP) — used
+     * for local development.
+     */
+    @Value("${app.email.brevo-api-key:}")
+    private String brevoApiKey;
 
     @Async
     public void sendWelcomeEmail(String to, String name) {
@@ -160,6 +175,35 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String htmlBody) {
+        if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+            sendViaBrevo(to, subject, htmlBody);
+        } else {
+            sendViaSmtp(to, subject, htmlBody);
+        }
+    }
+
+    /** Send through Brevo's transactional email HTTPS API (no SMTP ports needed). */
+    private void sendViaBrevo(String to, String subject, String htmlBody) {
+        try {
+            restClient.post()
+                    .uri("https://api.brevo.com/v3/smtp/email")
+                    .header("api-key", brevoApiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "sender",      Map.of("name", fromName, "email", fromEmail),
+                            "to",          List.of(Map.of("email", to)),
+                            "subject",     subject,
+                            "htmlContent", htmlBody))
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Email sent via Brevo to {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send email via Brevo to {}: {}", to, e.getMessage());
+        }
+    }
+
+    /** Send through the configured SMTP server (local development fallback). */
+    private void sendViaSmtp(String to, String subject, String htmlBody) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
