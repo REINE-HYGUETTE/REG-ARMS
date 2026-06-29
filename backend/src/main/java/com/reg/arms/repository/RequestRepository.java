@@ -18,6 +18,9 @@ public interface RequestRepository extends JpaRepository<Request, Long>, JpaSpec
 
     Optional<Request> findByRequestCode(String requestCode);
 
+    /** Active (non-archived) requests in a district — used for STAFF-scoped dashboard stats. */
+    List<Request> findByDistrictIgnoreCaseAndArchivedAtIsNull(String district);
+
     Page<Request> findByCustomerId(Long customerId, Pageable pageable);
 
     Page<Request> findByAssignedTechnicianId(Long technicianId, Pageable pageable);

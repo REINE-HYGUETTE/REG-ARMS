@@ -161,8 +161,8 @@ public class RequestController {
 
     @GetMapping("/stats")
     @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
-    public ResponseEntity<DashboardStatsResponse> stats() {
-        return ResponseEntity.ok(requestService.getStats());
+    public ResponseEntity<DashboardStatsResponse> stats(@AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(requestService.getStats(principal));
     }
 
     // ── Feature 1: Smart technician matching ─────────────────────────────────

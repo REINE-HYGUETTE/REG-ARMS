@@ -562,7 +562,64 @@ public class RequestService {
     }
 
     @Transactional(readOnly = true)
-    public DashboardStatsResponse getStats() {
+    public DashboardStatsResponse getStats(UserPrincipal principal) {
+        // STAFF dashboards are scoped to their own district, mirroring the
+        // district-scoped request list. ADMIN sees global stats.
+        if (principal != null && principal.getRole() == UserRole.STAFF) {
+            User staffUser = userRepository.findById(principal.getId()).orElseThrow();
+            String district = staffUser.getDistrict();
+            if (district != null && !district.isBlank()) {
+                return computeStats(
+                        requestRepository.findByDistrictIgnoreCaseAndArchivedAtIsNull(district));
+            }
+        }
+        return computeGlobalStats();
+    }
+
+    /** Build dashboard stats from an in-memory list (used for district-scoped STAFF view). */
+    private DashboardStatsResponse computeStats(List<Request> requests) {
+        long total = 0, pending = 0, inProgress = 0, resolved = 0, closed = 0, critical = 0, high = 0, thisWeek = 0;
+        LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
+        double sumHours = 0;
+        long resolvedForAvg = 0;
+
+        for (Request r : requests) {
+            total++;
+            switch (r.getStatus()) {
+                case Pending -> pending++;
+                case In_Progress -> inProgress++;
+                case Resolved -> resolved++;
+                case Closed -> closed++;
+                default -> { /* Assigned, Problematic, Cancelled not surfaced as cards */ }
+            }
+            PriorityLevel p = r.getManualPriority() != null ? r.getManualPriority() : r.getAiPriority();
+            if (p == PriorityLevel.Critical) critical++;
+            else if (p == PriorityLevel.High) high++;
+
+            if (r.getCreatedAt() != null && r.getCreatedAt().isAfter(weekAgo)) thisWeek++;
+
+            if ((r.getStatus() == RequestStatus.Resolved || r.getStatus() == RequestStatus.Closed)
+                    && r.getResolvedAt() != null && r.getCreatedAt() != null) {
+                sumHours += java.time.Duration.between(r.getCreatedAt(), r.getResolvedAt()).toMinutes() / 60.0;
+                resolvedForAvg++;
+            }
+        }
+
+        Double avgHours = resolvedForAvg > 0 ? sumHours / resolvedForAvg : null;
+        return DashboardStatsResponse.builder()
+                .total(total)
+                .pending(pending)
+                .inProgress(inProgress)
+                .resolved(resolved)
+                .closed(closed)
+                .critical(critical)
+                .high(high)
+                .thisWeek(thisWeek)
+                .avgResolutionHours(avgHours)
+                .build();
+    }
+
+    private DashboardStatsResponse computeGlobalStats() {
         List<Object[]> statusCounts = requestRepository.countByStatusGrouped();
         List<Object[]> priorityCounts = requestRepository.countByFinalPriority();
 
