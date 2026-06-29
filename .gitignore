@@ -1,7 +1,11 @@
 # ── Secrets / local config ────────────────────────────────────────────────────
-backend/src/main/resources/application.yml
+# application.yml is now fully env-driven (no secrets) and IS tracked so it ships
+# in the Docker image; real values come from environment variables at runtime.
 .env
 *.env
+
+# ── Build artifacts ──────────────────────────────────────────────────────────
+frontend/tsconfig.tsbuildinfo
 
 # ── Uploads (user files, not part of source) ─────────────────────────────────
 uploads/

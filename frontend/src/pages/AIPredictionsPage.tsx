@@ -230,7 +230,7 @@ export default function AIPredictionsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f5f1" />
                   <XAxis dataKey="priority" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                  <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Accuracy']} />
+                  <Tooltip formatter={(v) => [`${Number(v).toFixed(1)}%`, 'Accuracy']} />
                   <Bar dataKey="accuracy" name="Accuracy %" radius={[6, 6, 0, 0]}>
                     {(aiData ?? []).map((e) => (
                       <Cell key={e.priority} fill={PRIORITY_COLOURS[e.priority] ?? BLUE} />
@@ -253,7 +253,7 @@ export default function AIPredictionsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f5f1" />
                   <XAxis dataKey="priority" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                  <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'Confidence']} />
+                  <Tooltip formatter={(v) => [`${(Number(v) * 100).toFixed(1)}%`, 'Confidence']} />
                   <Bar dataKey="confidence" name="Avg Confidence" radius={[4, 4, 0, 0]}>
                     {(aiData ?? []).map((e) => (
                       <Cell key={e.priority} fill={PRIORITY_COLOURS[e.priority] ?? BLUE} />

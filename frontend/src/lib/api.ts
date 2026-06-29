@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+// In dev, leave VITE_API_URL unset → uses '/api' (Vite proxy → :8080).
+// In production, set VITE_API_URL to the backend origin, e.g.
+//   https://reg-arms-api.onrender.com/api
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
