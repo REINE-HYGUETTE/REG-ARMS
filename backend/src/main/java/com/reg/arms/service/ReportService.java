@@ -1,8 +1,12 @@
 package com.reg.arms.service;
 
 import com.reg.arms.dto.response.HotspotResponse;
+import com.reg.arms.entity.User;
+import com.reg.arms.entity.enums.UserRole;
 import com.reg.arms.repository.AiPredictionRepository;
 import com.reg.arms.repository.RequestRepository;
+import com.reg.arms.repository.UserRepository;
+import com.reg.arms.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +22,7 @@ public class ReportService {
 
     private final RequestRepository requestRepository;
     private final AiPredictionRepository aiPredictionRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> monthlyVolume(int months) {
@@ -215,9 +220,24 @@ public class ReportService {
     // ── Feature 4: hotspot detection ─────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public List<HotspotResponse> hotspots(int hours, int minCount) {
+    public List<HotspotResponse> hotspots(int hours, int minCount, UserPrincipal principal) {
         LocalDateTime since = LocalDateTime.now().minusHours(hours);
-        return requestRepository.findHotspots(since, minCount).stream()
+
+        // STAFF only see hotspots within their own district (matches the
+        // district-scoped request list and dashboard stats). ADMIN sees all.
+        List<Object[]> rows;
+        if (principal != null && principal.getRole() == UserRole.STAFF) {
+            User staff = userRepository.findById(principal.getId()).orElseThrow();
+            String district = staff.getDistrict();
+            if (district == null || district.isBlank()) {
+                return List.of();
+            }
+            rows = requestRepository.findHotspotsByDistrict(since, minCount, district);
+        } else {
+            rows = requestRepository.findHotspots(since, minCount);
+        }
+
+        return rows.stream()
                 .map(row -> {
                     long total = ((Number) row[3]).longValue();
                     long crit  = ((Number) row[4]).longValue();

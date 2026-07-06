@@ -255,4 +255,23 @@ public interface RequestRepository extends JpaRepository<Request, Long>, JpaSpec
            nativeQuery = true)
     List<Object[]> findHotspots(@Param("since") LocalDateTime since,
                                  @Param("minCount") int minCount);
+
+    /** District-scoped hotspots — used so STAFF only see clusters in their own district. */
+    @Query(value = "SELECT sector, district, province, " +
+                   "       COUNT(*) AS total, " +
+                   "       SUM(CASE WHEN COALESCE(manual_priority::text, ai_priority::text) = 'Critical' THEN 1 ELSE 0 END) AS crit, " +
+                   "       SUM(CASE WHEN COALESCE(manual_priority::text, ai_priority::text) = 'High'     THEN 1 ELSE 0 END) AS hi, " +
+                   "       MAX(created_at) AS latest " +
+                   "FROM requests " +
+                   "WHERE created_at >= :since " +
+                   "  AND sector IS NOT NULL " +
+                   "  AND LOWER(district) = LOWER(:district) " +
+                   "  AND COALESCE(manual_priority::text, ai_priority::text) IN ('Critical','High') " +
+                   "GROUP BY sector, district, province " +
+                   "HAVING COUNT(*) >= :minCount " +
+                   "ORDER BY total DESC, latest DESC",
+           nativeQuery = true)
+    List<Object[]> findHotspotsByDistrict(@Param("since") LocalDateTime since,
+                                          @Param("minCount") int minCount,
+                                          @Param("district") String district);
 }

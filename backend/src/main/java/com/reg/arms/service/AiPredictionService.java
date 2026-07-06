@@ -9,12 +9,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,20 @@ public class AiPredictionService {
 
     private final AiPredictionRepository aiPredictionRepository;
     private final RequestRepository requestRepository;
+
+    // Generous read timeout so a free-tier AI service that has spun down has
+    // time to cold-start and answer (Render holds the request during wake-up),
+    // instead of instantly failing to the category-default fallback.
+    private final RestClient aiClient = RestClient.builder()
+            .requestFactory(timeoutFactory())
+            .build();
+
+    private static SimpleClientHttpRequestFactory timeoutFactory() {
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(Duration.ofSeconds(10));
+        f.setReadTimeout(Duration.ofSeconds(60));
+        return f;
+    }
 
     @Value("${app.ai.api-url}")
     private String aiApiUrl;
@@ -45,18 +61,7 @@ public class AiPredictionService {
     public AiResult predict(String title, String description, String categoryName,
                             PriorityLevel categoryDefault) {
         try {
-            RestClient client = RestClient.create();
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = client.post()
-                    .uri(aiApiUrl + "/api/predict")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of(
-                            "title",       title,
-                            "description", description,
-                            "category",    categoryName))
-                    .retrieve()
-                    .body(Map.class);
+            Map<String, Object> response = callAiWithRetry(title, description, categoryName);
 
             if (response == null) {
                 log.warn("AI service returned null response — falling back to category default ({})",
@@ -106,6 +111,41 @@ public class AiPredictionService {
                     categoryDefault, e.getMessage());
             return AiResult.fallback(categoryDefault);
         }
+    }
+
+    /**
+     * POST to the AI service, retrying once. The first request after the service
+     * has been idle may fail fast while it spins up; a short pause and one retry
+     * lets the now-waking service answer before we give up to the fallback.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> callAiWithRetry(String title, String description, String categoryName) {
+        RuntimeException last = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                return aiClient.post()
+                        .uri(aiApiUrl + "/api/predict")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of(
+                                "title",       title,
+                                "description", description,
+                                "category",    categoryName))
+                        .retrieve()
+                        .body(Map.class);
+            } catch (RuntimeException e) {
+                last = e;
+                log.warn("AI call attempt {}/2 failed: {}", attempt, e.getMessage());
+                if (attempt < 2) {
+                    try {
+                        Thread.sleep(1500);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        throw last != null ? last : new IllegalStateException("AI call failed");
     }
 
     /**

@@ -1,10 +1,12 @@
 package com.reg.arms.controller;
 
 import com.reg.arms.dto.response.HotspotResponse;
+import com.reg.arms.security.UserPrincipal;
 import com.reg.arms.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -94,7 +96,8 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<List<HotspotResponse>> hotspots(
             @RequestParam(defaultValue = "24") int hours,
-            @RequestParam(defaultValue = "3") int minCount) {
-        return ResponseEntity.ok(reportService.hotspots(hours, minCount));
+            @RequestParam(defaultValue = "3") int minCount,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.hotspots(hours, minCount, principal));
     }
 }
