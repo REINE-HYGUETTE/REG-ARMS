@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useProvinces, useDistricts } from '@/hooks/useLocations'
 import {
   UserPlus, Search, X, Loader2, Pencil, Trash2, Send,
   CheckCircle2, XCircle, Clock, ShieldCheck, ToggleLeft, ToggleRight,
@@ -381,20 +382,11 @@ export default function UsersPage() {
               <p className="text-[11px] text-text-muted mb-3">
                 This staff member will only manage requests and technicians within this district.
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label="Province *"
-                  value={newUser.province}
-                  onChange={(v) => setNewUser((p) => ({ ...p, province: v }))}
-                  placeholder="e.g. Kigali City"
-                />
-                <Field
-                  label="District *"
-                  value={newUser.district}
-                  onChange={(v) => setNewUser((p) => ({ ...p, district: v }))}
-                  placeholder="e.g. Gasabo"
-                />
-              </div>
+              <ProvinceDistrictSelect
+                province={newUser.province}
+                district={newUser.district}
+                onChange={({ province, district }) => setNewUser((p) => ({ ...p, province, district }))}
+              />
             </div>
           )}
 
@@ -564,6 +556,59 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
         placeholder={placeholder}
         className="w-full px-3.5 py-2.5 border-[1.5px] border-border rounded-xl text-sm bg-surface-alt focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10 outline-none transition-all"
       />
+    </div>
+  )
+}
+
+/* ── Province + District cascading dropdowns (canonical values, no free text) ── */
+function ProvinceDistrictSelect({ province, district, onChange }: {
+  province: string
+  district: string
+  onChange: (v: { province: string; district: string }) => void
+}) {
+  const [provinceId, setProvinceId] = useState<number | null>(null)
+  const { data: provinces = [] } = useProvinces()
+  const { data: districts = [] } = useDistricts(provinceId)
+
+  // Resolve a preset province name back to its id (e.g. re-opening the form)
+  useEffect(() => {
+    if (province && provinces.length) {
+      const match = provinces.find((p) => p.name === province)
+      if (match && match.id !== provinceId) setProvinceId(match.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [province, provinces])
+
+  const handleProvince = (name: string) => {
+    const item = provinces.find((p) => p.name === name) ?? null
+    setProvinceId(item?.id ?? null)
+    onChange({ province: name, district: '' })  // reset district when province changes
+  }
+
+  const selectCls =
+    'w-full px-3.5 py-2.5 border-[1.5px] border-border rounded-xl text-sm bg-surface-alt focus:border-primary focus:bg-white outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-all'
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-[11px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Province *</label>
+        <select value={province} onChange={(e) => handleProvince(e.target.value)} className={selectCls}>
+          <option value="">Select province…</option>
+          {provinces.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[11px] font-bold text-text-muted uppercase tracking-widest mb-1.5">District *</label>
+        <select
+          value={district}
+          onChange={(e) => onChange({ province, district: e.target.value })}
+          disabled={!province}
+          className={selectCls}
+        >
+          <option value="">{province ? 'Select district…' : 'Pick a province first'}</option>
+          {districts.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
+      </div>
     </div>
   )
 }
