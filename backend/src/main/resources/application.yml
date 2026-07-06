@@ -35,6 +35,12 @@ spring:
           auth: true
           starttls:
             enable: true
+          # Fail fast instead of hanging forever when the host blocks SMTP —
+          # JavaMail's default timeouts are infinite, which silently eats the
+          # async send thread and never logs an error.
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
     from-name: REG ARMS Notifications
 
   jackson:
