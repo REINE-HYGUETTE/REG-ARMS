@@ -12,11 +12,11 @@ import lombok.Setter;
 @Setter
 public class CreateUserRequest {
 
-    @NotBlank(message = "First name is required")
+    // Name is optional: the invite flow only needs an email + role. The invited
+    // user fills in their own name and password when they accept the invitation.
     @Size(max = 100)
     private String firstName;
 
-    @NotBlank(message = "Last name is required")
     @Size(max = 100)
     private String lastName;
 

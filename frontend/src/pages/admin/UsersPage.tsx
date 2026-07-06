@@ -21,7 +21,7 @@ type CreateForm = {
   province: string; district: string
 }
 const emptyCreate: CreateForm = {
-  firstName: '', lastName: '', email: '', password: '', phone: '', role: 'CUSTOMER',
+  firstName: '', lastName: '', email: '', password: '', phone: '', role: 'TECHNICIAN',
   province: '', district: '',
 }
 
@@ -73,7 +73,7 @@ export default function UsersPage() {
   })
 
   const toggleMutation   = useMutation({ mutationFn: async (id: number) => api.patch(`/admin/users/${id}/toggle-status`),  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }) })
-  const createMutation   = useMutation({ mutationFn: async () => api.post('/admin/users', newUser), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); setShowCreate(false); setNewUser(emptyCreate) } })
+  const createMutation   = useMutation({ mutationFn: async () => api.post('/admin/users', { email: newUser.email, role: newUser.role, province: newUser.province, district: newUser.district }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); setShowCreate(false); setNewUser(emptyCreate) } })
   const editMutation     = useMutation({ mutationFn: async () => api.put(`/admin/users/${editTarget!.id}`, { ...editBasic, province: editLocation.province, district: editLocation.district, sector: editLocation.sector, cell: editLocation.cell, village: editLocation.village }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); setEditTarget(null) } })
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const deleteMutation   = useMutation({
@@ -176,7 +176,7 @@ export default function UsersPage() {
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-dark transition-colors shadow-sm"
         >
-          <UserPlus size={16} /> Create User
+          <UserPlus size={16} /> Invite User
         </button>
       </div>
 
@@ -359,25 +359,17 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* ── Create User Modal ── */}
+      {/* ── Invite User Modal ── */}
       {showCreate && (
         <Modal
-          title="Create New User"
-          subtitle="Fill in the details below. A welcome email will be sent automatically."
-          icon={<UserPlus size={18} className="text-primary" />}
+          title="Invite a User"
+          subtitle="Enter an email and role. They'll receive a link to set their own name and password."
+          icon={<Send size={18} className="text-primary" />}
           onClose={() => setShowCreate(false)}
         >
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="First Name" value={newUser.firstName} onChange={(v) => setNewUser((p) => ({ ...p, firstName: v }))} />
-            <Field label="Last Name"  value={newUser.lastName}  onChange={(v) => setNewUser((p) => ({ ...p, lastName: v }))} />
-            <div className="col-span-2">
-              <Field label="Email Address" value={newUser.email} onChange={(v) => setNewUser((p) => ({ ...p, email: v }))} type="email" />
-            </div>
-            <Field label="Password (optional)" value={newUser.password} onChange={(v) => setNewUser((p) => ({ ...p, password: v }))} type="password" placeholder="Leave blank to auto-generate" />
-            <Field label="Phone" value={newUser.phone} onChange={(v) => setNewUser((p) => ({ ...p, phone: v }))} type="tel" />
-            <div className="col-span-2">
-              <RoleSelect value={newUser.role} onChange={(v) => setNewUser((p) => ({ ...p, role: v, province: '', district: '' }))} />
-            </div>
+          <div className="grid grid-cols-1 gap-4">
+            <Field label="Email Address" value={newUser.email} onChange={(v) => setNewUser((p) => ({ ...p, email: v }))} type="email" placeholder="person@example.com" />
+            <RoleSelect value={newUser.role} onChange={(v) => setNewUser((p) => ({ ...p, role: v, province: '', district: '' }))} />
           </div>
 
           {/* Province + District required for Staff accounts */}
@@ -408,23 +400,26 @@ export default function UsersPage() {
 
           <p className="text-[11px] text-text-muted mt-3 flex items-center gap-1.5">
             <ShieldCheck size={11} className="text-text-muted" />
-            If no password is set, a secure one will be auto-generated and emailed to the user.
+            An invitation email is sent with a secure link (valid 7 days). The user sets their own name and password — no temporary passwords.
           </p>
           <div className="flex gap-3 mt-5">
             <button
               onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || (newUser.role === 'STAFF' && (!newUser.province || !newUser.district))}
+              disabled={createMutation.isPending || !newUser.email || (newUser.role === 'STAFF' && (!newUser.province || !newUser.district))}
               className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-dark disabled:opacity-50 shadow-sm transition-colors"
             >
-              {createMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-              Create & Send Invite
+              {createMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              Send Invitation
             </button>
             <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 border border-border rounded-xl text-sm font-medium text-text-secondary hover:bg-surface-alt transition-colors">Cancel</button>
           </div>
           {createMutation.isError && (
             <p className="text-xs text-red-600 mt-3 font-medium">
-              {(createMutation.error as any)?.response?.data?.message ?? 'Failed to create user. Email may already be in use.'}
+              {(createMutation.error as any)?.response?.data?.message ?? 'Failed to send invitation. Email may already be in use.'}
             </p>
+          )}
+          {createMutation.isSuccess && (
+            <p className="text-xs text-emerald-600 mt-3 font-medium flex items-center gap-1"><CheckCircle2 size={12} /> Invitation sent.</p>
           )}
         </Modal>
       )}

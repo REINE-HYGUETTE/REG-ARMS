@@ -123,6 +123,22 @@ public class EmailService {
         send(to, subject, body);
     }
 
+    /**
+     * Invitation to set up a Staff/Technician account. The recipient clicks the
+     * link, fills in their own name, and chooses their own password.
+     */
+    @Async
+    public void sendInviteEmail(String to, String inviteUrl, String roleLabel) {
+        String subject = "You've been invited to join REG ARMS";
+        String message = String.format(
+                "You have been invited to join the REG ARMS portal as a <strong>%s</strong>.<br><br>" +
+                "Click the button below to set up your account — you'll choose your own name and password. " +
+                "This invitation link is valid for 7 days.",
+                roleLabel);
+        String body = buildEmailTemplate("there", message, "Set Up My Account", inviteUrl);
+        send(to, subject, body);
+    }
+
     @Async
     public void sendPasswordResetEmail(String to, String name, String resetUrl) {
         String subject = "REG ARMS — Password Reset Request";

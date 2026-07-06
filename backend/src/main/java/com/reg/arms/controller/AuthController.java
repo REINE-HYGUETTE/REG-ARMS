@@ -3,6 +3,7 @@ package com.reg.arms.controller;
 import com.reg.arms.dto.request.*;
 import com.reg.arms.dto.response.ApiResponse;
 import com.reg.arms.dto.response.AuthResponse;
+import com.reg.arms.dto.response.InvitationInfoResponse;
 import com.reg.arms.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -41,5 +42,18 @@ public class AuthController {
     public ResponseEntity<ApiResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success("Password has been reset successfully."));
+    }
+
+    /** Validate an invitation token so the accept-invite page can greet the invitee. */
+    @GetMapping("/invitation")
+    public ResponseEntity<InvitationInfoResponse> getInvitation(@RequestParam String token) {
+        return ResponseEntity.ok(authService.getInvitation(token));
+    }
+
+    /** Complete an invited account — the invitee sets their own name and password. */
+    @PostMapping("/accept-invite")
+    public ResponseEntity<ApiResponse> acceptInvite(@Valid @RequestBody AcceptInviteRequest request) {
+        authService.acceptInvite(request);
+        return ResponseEntity.ok(ApiResponse.success("Your account has been set up. You can now sign in."));
     }
 }

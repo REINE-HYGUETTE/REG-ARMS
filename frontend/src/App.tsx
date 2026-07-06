@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import LoginPage from '@/pages/LoginPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
+import AcceptInvitePage from '@/pages/AcceptInvitePage'
 import DashboardRedirect from '@/pages/DashboardRedirect'
 import NotFoundPage from '@/pages/NotFoundPage'
 
@@ -43,6 +44,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
             <Route element={<AppLayout />}>
               {/* Redirect / to role-based dashboard */}

@@ -3,6 +3,7 @@ package com.reg.arms.service;
 import com.reg.arms.dto.request.*;
 import com.reg.arms.dto.response.ApiResponse;
 import com.reg.arms.dto.response.AuthResponse;
+import com.reg.arms.dto.response.InvitationInfoResponse;
 import com.reg.arms.entity.User;
 import com.reg.arms.entity.enums.UserRole;
 import com.reg.arms.exception.BadRequestException;
@@ -138,6 +139,52 @@ public class AuthService {
             String resetUrl = frontendUrl + "/reset-password?token=" + rawToken;
             emailService.sendPasswordResetEmail(user.getEmail(), user.getFullName(), resetUrl);
         });
+    }
+
+    /**
+     * Validate an invitation token (used by the accept-invite page on load) and
+     * return who it's for. The invitation is only valid while unexpired and the
+     * account has never been logged into (i.e. not yet claimed).
+     */
+    @Transactional(readOnly = true)
+    public InvitationInfoResponse getInvitation(String token) {
+        User user = findValidInvite(token);
+        return InvitationInfoResponse.builder()
+                .email(user.getEmail())
+                .role(user.getRole())
+                .build();
+    }
+
+    /** Complete an invited account: set the real name, phone and chosen password. */
+    @Transactional
+    public void acceptInvite(AcceptInviteRequest request) {
+        User user = findValidInvite(request.getToken());
+
+        user.setFirstName(request.getFirstName().trim());
+        user.setLastName(request.getLastName().trim());
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            user.setPhone(request.getPhone().trim());
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setEmailVerified(true);
+        user.setIsActive(true);
+        user.setResetToken(null);
+        user.setResetExpires(null);
+        userRepository.save(user);
+
+        log.info("Invitation accepted — account claimed: email={}, role={}", user.getEmail(), user.getRole());
+    }
+
+    private User findValidInvite(String token) {
+        User user = userRepository.findByResetToken(token)
+                .orElseThrow(() -> new BadRequestException("This invitation link is invalid or has already been used."));
+        if (user.getResetExpires() == null || user.getResetExpires().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("This invitation link has expired. Please ask an administrator to resend it.");
+        }
+        if (user.getLastLogin() != null) {
+            throw new BadRequestException("This account has already been set up. Please sign in instead.");
+        }
+        return user;
     }
 
     @Transactional

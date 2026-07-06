@@ -14,12 +14,14 @@ import com.reg.arms.repository.TechnicianRepository;
 import com.reg.arms.repository.UserRepository;
 import com.reg.arms.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 
@@ -27,10 +29,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserService {
 
+    /** How long an account-setup invitation link stays valid. */
+    private static final long INVITE_VALID_DAYS = 7;
+
     private final UserRepository userRepository;
     private final TechnicianRepository technicianRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     @Transactional(readOnly = true)
     public UserResponse getProfile(Long userId) {
@@ -112,12 +120,32 @@ public class UserService {
         if (user.getLastLogin() != null) {
             throw new BadRequestException("This user has already logged in. Use the edit form to update their details.");
         }
-        byte[] bytes = new byte[8];
-        new SecureRandom().nextBytes(bytes);
-        String newPassword = HexFormat.of().formatHex(bytes);
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        String token = newInviteToken(user);
         userRepository.save(user);
-        emailService.sendWelcomeEmailWithCredentials(user.getEmail(), user.getFullName(), newPassword);
+        emailService.sendInviteEmail(user.getEmail(), inviteUrl(token), roleLabel(user.getRole()));
+    }
+
+    /** Generate a fresh single-use invite token (7-day expiry) and stash it on the user. */
+    private String newInviteToken(User user) {
+        byte[] tokenBytes = new byte[32];
+        new SecureRandom().nextBytes(tokenBytes);
+        String token = HexFormat.of().formatHex(tokenBytes);
+        user.setResetToken(token);
+        user.setResetExpires(LocalDateTime.now().plusDays(INVITE_VALID_DAYS));
+        return token;
+    }
+
+    private String inviteUrl(String token) {
+        return frontendUrl + "/accept-invite?token=" + token;
+    }
+
+    private String roleLabel(UserRole role) {
+        return switch (role) {
+            case STAFF      -> "Staff";
+            case TECHNICIAN -> "Technician";
+            case ADMIN      -> "Administrator";
+            case CUSTOMER   -> "Customer";
+        };
     }
 
     /**
@@ -170,26 +198,34 @@ public class UserService {
             inheritedDistrict = request.getDistrict();
         }
 
-        // ── Generate password if not provided ─────────────────────────────────
-        String password = request.getPassword();
-        if (password == null || password.isBlank()) {
-            byte[] bytes = new byte[8];
-            new SecureRandom().nextBytes(bytes);
-            password = HexFormat.of().formatHex(bytes);
-        }
+        // ── Placeholder identity until the invitee completes setup ────────────
+        // The invited user fills in their real name and sets their own password
+        // when they accept the invitation. We store a throwaway password so the
+        // account can never be logged into before it is claimed.
+        String firstName = (request.getFirstName() != null && !request.getFirstName().isBlank())
+                ? request.getFirstName() : "Invited";
+        String lastName = (request.getLastName() != null && !request.getLastName().isBlank())
+                ? request.getLastName() : "User";
+
+        byte[] pwBytes = new byte[24];
+        new SecureRandom().nextBytes(pwBytes);
+        String throwawayPassword = HexFormat.of().formatHex(pwBytes);
 
         User user = User.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
+                .firstName(firstName)
+                .lastName(lastName)
                 .email(request.getEmail())
                 .phone(request.getPhone() != null ? request.getPhone() : "")
-                .passwordHash(passwordEncoder.encode(password))
+                .passwordHash(passwordEncoder.encode(throwawayPassword))
                 .role(request.getRole())
                 .province(inheritedProvince)
                 .district(inheritedDistrict)
                 .isActive(true)
                 .emailVerified(false)
                 .build();
+
+        // Attach the invitation token before the first save.
+        String inviteToken = newInviteToken(user);
 
         user = userRepository.save(user);
 
@@ -214,9 +250,8 @@ public class UserService {
             technicianRepository.save(tech);
         }
 
-        final String savedPassword = password;
-        final String fullName = user.getFirstName() + " " + user.getLastName();
-        emailService.sendWelcomeEmailWithCredentials(user.getEmail(), fullName, savedPassword);
+        // ── Send the invitation email with a setup link ───────────────────────
+        emailService.sendInviteEmail(user.getEmail(), inviteUrl(inviteToken), roleLabel(user.getRole()));
         return UserResponse.from(user);
     }
 
