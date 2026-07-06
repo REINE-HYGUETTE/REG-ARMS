@@ -23,7 +23,12 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final RestClient restClient = RestClient.create();
 
-    @Value("${spring.mail.username}")
+    /**
+     * The From address on outgoing mail. Defaults to the SMTP username for
+     * plain Gmail SMTP, but must be set separately when the SMTP login is an
+     * API key (e.g. Mailjet) rather than an email address.
+     */
+    @Value("${app.email.from-address:${spring.mail.username}}")
     private String fromEmail;
 
     @Value("${spring.mail.from-name}")

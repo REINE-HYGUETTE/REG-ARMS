@@ -74,6 +74,9 @@ app:
     # When set, email goes through Brevo's HTTPS API (for hosts that block SMTP).
     # When blank, the app uses SMTP (spring.mail.*) — local dev default.
     brevo-api-key: ${BREVO_API_KEY:}
+    # From address on outgoing mail. Set when the SMTP login is an API key
+    # (relay services like Mailjet); defaults to the SMTP username.
+    from-address: ${MAIL_FROM_ADDRESS:${spring.mail.username}}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
     allowed-extensions: jpg,jpeg,png,pdf,doc,docx
