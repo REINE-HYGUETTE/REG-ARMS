@@ -84,6 +84,14 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(ApiResponse.error("An account with this email address already exists."));
             }
+            if (cause.contains("employee_id")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiResponse.error("A technician with this employee ID already exists. Please try again."));
+            }
+            if (cause.contains("not-null constraint")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiResponse.error("A required field was missing when saving. Please contact support — details were logged on the server."));
+            }
         }
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("This operation conflicts with existing data. Try deactivating instead of deleting."));

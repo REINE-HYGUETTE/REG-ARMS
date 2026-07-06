@@ -6,6 +6,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,9 +60,13 @@ public class Technician extends BaseEntity {
     // ── Smart-matching enhancements (V13) ─────────────────────────────────────
 
     /** District-level service areas (e.g. ["Gasabo", "Kicukiro"]) */
+    // NOT NULL in the DB (V13). Hibernate inserts every mapped column explicitly,
+    // so the DB DEFAULT never applies — these must be initialized on the Java
+    // side (and @Builder.Default so Technician.builder() keeps the initializer).
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "district_coverage", columnDefinition = "jsonb")
-    private List<String> districtCoverage;
+    @Column(name = "district_coverage", columnDefinition = "jsonb", nullable = false)
+    @Builder.Default
+    private List<String> districtCoverage = new ArrayList<>();
 
     /**
      * Number of requests resolved per category name.
@@ -68,8 +74,9 @@ public class Technician extends BaseEntity {
      * Populated automatically by TechnicianService.recordResolution().
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "category_resolved_counts", columnDefinition = "jsonb")
-    private Map<String, Integer> categoryResolvedCounts;
+    @Column(name = "category_resolved_counts", columnDefinition = "jsonb", nullable = false)
+    @Builder.Default
+    private Map<String, Integer> categoryResolvedCounts = new HashMap<>();
 
     /**
      * Structured specialization tags — exact category names staff assigned
@@ -77,8 +84,9 @@ public class Technician extends BaseEntity {
      * Used for precise matching instead of keyword tokenization.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "specialization_tags", columnDefinition = "jsonb")
-    private List<String> specializationTags;
+    @Column(name = "specialization_tags", columnDefinition = "jsonb", nullable = false)
+    @Builder.Default
+    private List<String> specializationTags = new ArrayList<>();
 
     // ── Pursue-flow tracking (V21) ────────────────────────────────────────────
 
