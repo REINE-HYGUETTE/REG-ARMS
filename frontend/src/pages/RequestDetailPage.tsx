@@ -467,7 +467,13 @@ export default function RequestDetailPage() {
               <div className="flex items-center gap-2">
                 <PriorityBadge priority={request.aiPriority} />
                 {request.aiConfidence && (
-                  <span className="text-xs text-text-muted">{(request.aiConfidence * 100).toFixed(0)}%</span>
+                  <span className="text-xs text-text-muted">
+                    {role === 'CUSTOMER'
+                      ? request.aiConfidence >= 0.6 ? 'High confidence'
+                        : request.aiConfidence >= 0.45 ? 'Moderate confidence'
+                        : 'Verified by staff'
+                      : `${(request.aiConfidence * 100).toFixed(0)}%`}
+                  </span>
                 )}
               </div>
             </div>

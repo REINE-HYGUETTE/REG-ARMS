@@ -10,6 +10,15 @@ import type { AIPrediction, Category, CategorySuggestion, PriorityLevel, Similar
 
 const emptyLocation: LocationValue = { province: '', district: '', sector: '', cell: '', village: '' }
 
+// Customers see a qualitative confidence band instead of the raw multi-class
+// probability — a technically-solid 45% on a 4-class problem reads as a
+// "failing grade" to non-ML users. Staff/admin views keep exact percentages.
+function confidenceBand(p: { confidence: number; isUncertain?: boolean }): { label: string; level: 1 | 2 | 3 } {
+  if (p.isUncertain || p.confidence < 0.45) return { label: 'Needs staff review', level: 1 }
+  if (p.confidence >= 0.6) return { label: 'High', level: 3 }
+  return { label: 'Moderate', level: 2 }
+}
+
 export default function SubmitRequestPage() {
   const navigate = useNavigate()
   const { fullName, userId } = useAuth()
@@ -428,7 +437,7 @@ export default function SubmitRequestPage() {
                       <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
                         <AlertTriangle size={13} className="text-amber-500 flex-shrink-0" />
                         <span className="text-xs text-amber-700 font-medium">
-                          Low confidence ({(prediction.confidence * 100).toFixed(0)}%) — AI is uncertain. Staff will verify the priority.
+                          The AI is uncertain about this one — our staff will verify the priority.
                         </span>
                       </div>
                     )}
@@ -445,14 +454,20 @@ export default function SubmitRequestPage() {
                       </div>
                       <div className="bg-white border border-primary/15 rounded-lg p-3.5 text-center">
                         <div className={`text-xl font-bold mb-1 ${prediction.isUncertain ? 'text-amber-500' : 'text-primary'}`}>
-                          {(prediction.confidence * 100).toFixed(1)}%
+                          {confidenceBand(prediction).label}
                         </div>
-                        <div className="text-[11px] text-text-muted">Confidence Score</div>
-                        <div className="h-2 bg-surface-alt rounded-full overflow-hidden mt-2">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${prediction.isUncertain ? 'bg-amber-400' : 'bg-primary'}`}
-                            style={{ width: `${prediction.confidence * 100}%` }}
-                          />
+                        <div className="text-[11px] text-text-muted">AI Confidence</div>
+                        <div className="flex gap-1 mt-2">
+                          {[1, 2, 3].map((seg) => (
+                            <div
+                              key={seg}
+                              className={`h-2 flex-1 rounded-full transition-all duration-700 ${
+                                seg <= confidenceBand(prediction).level
+                                  ? prediction.isUncertain ? 'bg-amber-400' : 'bg-primary'
+                                  : 'bg-surface-alt'
+                              }`}
+                            />
+                          ))}
                         </div>
                       </div>
                     </div>
