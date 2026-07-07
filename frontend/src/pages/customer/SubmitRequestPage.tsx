@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Upload, X, Brain, Loader2, AlertTriangle, Send, RotateCcw, Sparkles, Info } from 'lucide-react'
 import api from '@/lib/api'
@@ -70,6 +70,7 @@ export default function SubmitRequestPage() {
   const duplicateTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
   const aiTimer = useRef<ReturnType<typeof setTimeout>>(null)
+  const aiRun = useRef(0)  // guards against stale results when the user keeps typing
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
@@ -132,23 +133,31 @@ export default function SubmitRequestPage() {
         setAiLoading(true)
         if (aiTimer.current) clearTimeout(aiTimer.current)
         aiTimer.current = setTimeout(async () => {
-          try {
-            const { data } = await api.post<AIPrediction>('/requests/predict', {
-              title,
-              description,
-              categoryId: Number(categoryId),
-            })
-            setPrediction(data)
-          } catch {
-            // AI service unavailable — show a clear notice instead of fake data
-            setPrediction({
-              priority: 'Medium',
-              confidence: 0,
-              keywords: [],
-            })
-          } finally {
-            setAiLoading(false)
+          const myRun = ++aiRun.current
+          // Free-tier services can be cold-starting; retry a couple of times
+          // (services waking up) before showing the "unavailable" fallback.
+          const delays = [0, 3500, 6000]
+          for (let i = 0; i < delays.length; i++) {
+            if (delays[i]) await new Promise((r) => setTimeout(r, delays[i]))
+            if (aiRun.current !== myRun) return // superseded by newer input
+            try {
+              const { data } = await api.post<AIPrediction>('/requests/predict', {
+                title,
+                description,
+                categoryId: Number(categoryId),
+              })
+              if (aiRun.current !== myRun) return
+              setPrediction(data)
+              setAiLoading(false)
+              return
+            } catch {
+              // keep retrying; the last failure falls through to the notice below
+            }
           }
+          if (aiRun.current !== myRun) return
+          // All attempts failed — show a clear notice instead of fake data
+          setPrediction({ priority: 'Medium', confidence: 0, keywords: [] })
+          setAiLoading(false)
         }, 1200)
       }
     },
@@ -318,19 +327,26 @@ export default function SubmitRequestPage() {
             />
           </div>
 
-          {/* Location — spans full width */}
+          {/* Location — spans full width. Read-only: sourced from the customer's
+              profile so it stays consistent and can't be changed by accident here. */}
           <div className="md:col-span-2">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
                 Location *
               </p>
-              {profileData?.province && location.province === profileData.province && (
-                <span className="text-[10px] text-primary bg-primary-light px-2 py-0.5 rounded-full border border-primary/20">
-                  Pre-filled from your profile · Edit if different
+              {profileData?.province ? (
+                <span className="text-[10px] text-text-muted bg-surface-alt px-2 py-0.5 rounded-full border border-border">
+                  From your profile ·{' '}
+                  <Link to="/profile" className="text-primary font-semibold hover:underline">Edit in Profile</Link>
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  Not set ·{' '}
+                  <Link to="/profile" className="font-semibold hover:underline">Add it in your Profile</Link>
                 </span>
               )}
             </div>
-            <LocationSelector value={location} onChange={handleLocationChange} />
+            <LocationSelector value={location} onChange={handleLocationChange} disabled />
             {!locationComplete && submitMutation.isError && (
               <p className="text-xs text-red-600 mt-1">Please complete all required location fields.</p>
             )}
