@@ -85,7 +85,20 @@ export default function UsersPage() {
       setDeleteError(typeof msg === 'string' ? msg : 'Failed to delete user.')
     },
   })
-  const resendMutation   = useMutation({ mutationFn: async (id: number) => api.post(`/admin/users/${id}/resend-invite`),  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }) })
+  const [resendFeedback, setResendFeedback] = useState<{ id: number; ok: boolean; msg: string } | null>(null)
+  const resendMutation   = useMutation({
+    mutationFn: async (id: number) => api.post(`/admin/users/${id}/resend-invite`),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setResendFeedback({ id, ok: true, msg: 'Invite sent ✓' })
+      setTimeout(() => setResendFeedback(null), 5000)
+    },
+    onError: (err: any, id) => {
+      const msg = err?.response?.data?.message ?? 'Failed to send'
+      setResendFeedback({ id, ok: false, msg: typeof msg === 'string' ? msg : 'Failed to send' })
+      setTimeout(() => setResendFeedback(null), 8000)
+    },
+  })
   const approveMutation  = useMutation({ mutationFn: async (id: number) => api.patch(`/admin/users/${id}/approve`),        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }) })
   const rejectMutation   = useMutation({ mutationFn: async (id: number) => api.delete(`/admin/users/${id}/reject`),       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }) })
 
@@ -308,14 +321,20 @@ export default function UsersPage() {
 
                           {/* Resend invite */}
                           {isInvited && !isSelf && (
-                            <button
-                              onClick={() => resendMutation.mutate(u.id)}
-                              disabled={resendMutation.isPending}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors border border-transparent hover:border-amber-200 disabled:opacity-50"
-                              title="Resend invite email"
-                            >
-                              {resendMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={13} />} Resend
-                            </button>
+                            resendFeedback?.id === u.id ? (
+                              <span className={`px-3 py-1.5 text-xs font-bold ${resendFeedback.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {resendFeedback.msg}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => resendMutation.mutate(u.id)}
+                                disabled={resendMutation.isPending}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors border border-transparent hover:border-amber-200 disabled:opacity-50"
+                                title="Resend invite email"
+                              >
+                                {resendMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={13} />} Resend
+                              </button>
+                            )
                           )}
 
                           {/* Toggle active */}

@@ -102,22 +102,19 @@ function SetCapacityModal({ tech, onClose, onSaved }: EditModalProps) {
   )
 }
 
-// ── Create Technician Modal (STAFF + ADMIN) ───────────────────────────────────
-interface CreateTechForm {
-  firstName: string; lastName: string; email: string
-  password: string; phone: string
-}
-const emptyTechForm: CreateTechForm = { firstName: '', lastName: '', email: '', password: '', phone: '' }
-
+// ── Invite Technician Modal (STAFF + ADMIN) ───────────────────────────────────
+// Invite-based onboarding: only an email is needed. The technician sets their
+// own name, phone and password from the emailed invitation link (valid 7 days).
 function CreateTechnicianModal({ onClose, onCreated, isStaff }: {
   onClose: () => void
   onCreated: () => void
   isStaff: boolean
 }) {
-  const [form, setForm] = useState<CreateTechForm>(emptyTechForm)
+  const [email, setEmail] = useState('')
+  const [sentTo, setSentTo] = useState<string | null>(null)
   const mutation = useMutation({
-    mutationFn: async () => api.post('/admin/users', { ...form, role: 'TECHNICIAN' }),
-    onSuccess: () => { onCreated(); onClose() },
+    mutationFn: async () => api.post('/admin/users', { email, role: 'TECHNICIAN' }),
+    onSuccess: () => { onCreated(); setSentTo(email); setEmail('') },
   })
 
   return (
@@ -129,10 +126,10 @@ function CreateTechnicianModal({ onClose, onCreated, isStaff }: {
               <UserPlus size={17} className="text-violet-600" />
             </div>
             <div>
-              <h3 className="text-[15px] font-bold text-text">Add Technician</h3>
+              <h3 className="text-[15px] font-bold text-text">Invite Technician</h3>
               {isStaff
                 ? <p className="text-[11px] text-text-muted mt-0.5">Technician will be assigned to your district automatically.</p>
-                : <p className="text-[11px] text-text-muted mt-0.5">Province &amp; district will be set via Edit after creation.</p>
+                : <p className="text-[11px] text-text-muted mt-0.5">Province &amp; district will be set via Edit after they join.</p>
               }
             </div>
           </div>
@@ -142,39 +139,54 @@ function CreateTechnicianModal({ onClose, onCreated, isStaff }: {
         </div>
 
         <div className="px-6 py-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <TechField label="First Name *" value={form.firstName} onChange={(v) => setForm((p) => ({ ...p, firstName: v }))} />
-            <TechField label="Last Name *"  value={form.lastName}  onChange={(v) => setForm((p) => ({ ...p, lastName: v }))} />
-          </div>
-          <TechField label="Email Address *" value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} type="email" />
-          <div className="grid grid-cols-2 gap-3">
-            <TechField label="Phone" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} type="tel" />
-            <TechField label="Password (optional)" value={form.password} onChange={(v) => setForm((p) => ({ ...p, password: v }))} type="password" placeholder="Auto-generate" />
-          </div>
+          {sentTo ? (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
+                <UserPlus size={22} className="text-emerald-600" />
+              </div>
+              <p className="text-sm font-bold text-text mb-1">Invitation sent</p>
+              <p className="text-xs text-text-muted mb-4">
+                An email was sent to <strong>{sentTo}</strong> with a link to set up their
+                account (valid for 7 days). They'll appear as “Invite pending” until they finish.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button onClick={() => setSentTo(null)} className="px-4 py-2 border border-border rounded-xl text-xs font-semibold text-text-secondary hover:bg-surface-alt transition-colors">
+                  Invite another
+                </button>
+                <button onClick={onClose} className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-dark transition-colors">
+                  Done
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <TechField label="Email Address *" value={email} onChange={setEmail} type="email" placeholder="technician@example.com" />
 
-          <p className="text-[11px] text-text-muted flex items-center gap-1.5 pt-1">
-            A welcome email with login credentials will be sent automatically.
-          </p>
+              <p className="text-[11px] text-text-muted flex items-center gap-1.5 pt-1">
+                They'll receive an invitation link to set their own name, phone and password — no temporary passwords.
+              </p>
 
-          {mutation.isError && (
-            <p className="text-xs text-red-600 font-medium">
-              {(mutation.error as any)?.response?.data?.message ?? 'Failed to create technician. Email may already be in use.'}
-            </p>
+              {mutation.isError && (
+                <p className="text-xs text-red-600 font-medium">
+                  {(mutation.error as any)?.response?.data?.message ?? 'Failed to send invitation. Email may already be in use.'}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => mutation.mutate()}
+                  disabled={mutation.isPending || !email.includes('@')}
+                  className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-dark disabled:opacity-50 shadow-sm transition-colors"
+                >
+                  {mutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
+                  Send Invitation
+                </button>
+                <button onClick={onClose} className="px-5 py-2.5 border border-border rounded-xl text-sm font-medium text-text-secondary hover:bg-surface-alt transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </>
           )}
-
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending || !form.firstName || !form.lastName || !form.email}
-              className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-dark disabled:opacity-50 shadow-sm transition-colors"
-            >
-              {mutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
-              Create & Send Invite
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-border rounded-xl text-sm font-medium text-text-secondary hover:bg-surface-alt transition-colors">
-              Cancel
-            </button>
-          </div>
         </div>
       </div>
     </div>
