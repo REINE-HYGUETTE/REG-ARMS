@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,13 +47,15 @@ public class NotificationService {
                 .build();
         notificationRepository.save(notification);
 
-        // Push live event via SSE if the user is connected
-        sseEmitterRegistry.push(user.getId(), Map.of(
-                "type",    type.name(),
-                "title",   title,
-                "message", message,
-                "requestId", request != null ? request.getId() : null
-        ));
+        // Push live event via SSE if the user is connected.
+        // NB: Map.of rejects null values — it would NPE (and roll back this
+        // insert) for system notifications with no linked request.
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", type.name());
+        payload.put("title", title);
+        payload.put("message", message);
+        payload.put("requestId", request != null ? request.getId() : null);
+        sseEmitterRegistry.push(user.getId(), payload);
     }
 
     @Transactional

@@ -31,7 +31,12 @@ export function useNotificationStream(enabled = true) {
     const token = localStorage.getItem('reg_token')
     if (!token) return
 
-    const url = `/api/notifications/stream?token=${encodeURIComponent(token)}`
+    // EventSource doesn't go through the axios instance, so it must resolve the
+    // API base itself. In production the app is served from Vercel while the API
+    // lives on another origin — a relative '/api/...' URL would hit Vercel's SPA
+    // rewrite and receive index.html instead of the stream.
+    const base = import.meta.env.VITE_API_URL || '/api'
+    const url = `${base}/notifications/stream?token=${encodeURIComponent(token)}`
     const es = new EventSource(url)
 
     es.addEventListener('notification', () => {
