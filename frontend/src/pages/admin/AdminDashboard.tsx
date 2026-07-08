@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
 import MetricCard from '@/components/ui/MetricCard'
@@ -70,6 +71,21 @@ export default function AdminDashboard() {
     queryFn: async () =>
       (await api.get<{ month: string; total: number; resolved: number }[]>('/reports/monthly-volume')).data,
   })
+
+  // The API only returns months that have requests, so a young system yields
+  // 1–2 sparse points and the area chart looks empty. Pad to a continuous
+  // last-6-months series (zero-filled) so the trend always has a full axis.
+  const paddedVolume = useMemo(() => {
+    const byMonth = new Map((monthlyData ?? []).map((m) => [m.month, m]))
+    const now = new Date()
+    const series: { month: string; total: number; resolved: number }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      series.push(byMonth.get(key) ?? { month: key, total: 0, resolved: 0 })
+    }
+    return series
+  }, [monthlyData])
 
   const { data: sla } = useQuery({
     queryKey: ['sla-metrics'],
@@ -184,10 +200,12 @@ export default function AdminDashboard() {
               <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide">Within SLA</span>
             </div>
             <p className="text-3xl font-bold text-emerald-700 leading-none mb-1">
-              {sla ? `${sla.withinSlaRate.toFixed(0)}%` : '—'}
+              {sla && sla.totalResolved > 0 ? `${sla.withinSlaRate.toFixed(0)}%` : '—'}
             </p>
             <p className="text-[11px] text-emerald-500">
-              {sla?.resolvedWithinSla ?? 0} / {sla?.totalResolved ?? 0} resolved
+              {sla && sla.totalResolved > 0
+                ? `${sla.resolvedWithinSla} / ${sla.totalResolved} resolved`
+                : 'No resolved requests yet'}
             </p>
           </div>
 
@@ -222,7 +240,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={monthlyData ?? []} margin={{ left: -10 }}>
+            <AreaChart data={paddedVolume} margin={{ left: -10 }}>
               <defs>
                 <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor={C1} stopOpacity={0.15} />
