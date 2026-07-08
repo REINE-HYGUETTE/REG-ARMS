@@ -239,15 +239,22 @@ public class UserService {
             while (technicianRepository.existsByEmployeeId(employeeId)) {
                 employeeId = String.format("EMP%03d", ++seq);
             }
-            Technician tech = Technician.builder()
+            // Seed coverage from the inherited location so reports and the
+            // matching algorithm see the technician's area from day one.
+            Technician.TechnicianBuilder builder = Technician.builder()
                     .user(user)
                     .employeeId(employeeId)
                     .isAvailable(true)
                     .currentWorkload(0)
                     .maxWorkload(5)
-                    .totalResolved(0)
-                    .build();
-            technicianRepository.save(tech);
+                    .totalResolved(0);
+            if (inheritedProvince != null && !inheritedProvince.isBlank()) {
+                builder.provinceCoverage(new java.util.ArrayList<>(List.of(inheritedProvince)));
+            }
+            if (inheritedDistrict != null && !inheritedDistrict.isBlank()) {
+                builder.districtCoverage(new java.util.ArrayList<>(List.of(inheritedDistrict)));
+            }
+            technicianRepository.save(builder.build());
         }
 
         // ── Send the invitation email with a setup link ───────────────────────
