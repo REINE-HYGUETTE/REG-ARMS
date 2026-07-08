@@ -50,8 +50,9 @@ public class SecurityConfig {
                         // Staff can create technician accounts — must come BEFORE the generic admin rule
                         .requestMatchers(HttpMethod.POST, "/api/admin/users").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        // Export endpoints stay admin-only; operational report reads are STAFF+ADMIN
-                        .requestMatchers("/api/reports/export/**").hasRole("ADMIN")
+                        // Reports (reads and exports) are ADMIN + STAFF; STAFF data is
+                        // district-scoped inside ReportService / ReportExportController
+                        .requestMatchers("/api/reports/export/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "STAFF")
                         .anyRequest().authenticated()
                 )

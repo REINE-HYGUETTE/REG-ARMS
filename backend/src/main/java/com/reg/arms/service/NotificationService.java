@@ -67,12 +67,28 @@ public class NotificationService {
         }
     }
 
-    /** Notifies both ADMIN and STAFF — used for SLA breach alerts. */
+    /**
+     * Notifies all ADMINs plus the STAFF responsible for the request's district —
+     * used for new-request routing, SLA breach and problem alerts.
+     *
+     * <p>Staff visibility is district-scoped everywhere else in the system
+     * (request list, dashboard, reports), so staff in other districts are not
+     * alerted about requests they cannot even open. Staff without a configured
+     * district have global visibility and therefore receive everything, and if
+     * the request itself has no district every staff member is notified.
+     */
     @Transactional
     public void notifyStaffAndAdmins(Request request, NotificationType type, String title, String message) {
+        String requestDistrict = request != null ? request.getDistrict() : null;
         List<User> recipients = userRepository.findByRoleInAndIsActiveTrue(
                 List.of(UserRole.ADMIN, UserRole.STAFF));
         for (User user : recipients) {
+            if (user.getRole() == UserRole.STAFF
+                    && requestDistrict != null && !requestDistrict.isBlank()
+                    && user.getDistrict() != null && !user.getDistrict().isBlank()
+                    && !requestDistrict.equalsIgnoreCase(user.getDistrict())) {
+                continue;   // staff member of a different district — not their request
+            }
             notifyUser(user, request, type, title, message);
         }
     }

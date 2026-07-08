@@ -24,10 +24,28 @@ public class ReportService {
     private final AiPredictionRepository aiPredictionRepository;
     private final UserRepository userRepository;
 
+    /**
+     * Resolves the district a report should be scoped to.
+     * Returns the caller's district for STAFF (looked up fresh so admin edits to
+     * the staff profile take effect immediately, mirroring {@link #hotspots}),
+     * or {@code null} for ADMIN / staff without a configured district — which
+     * means "global", matching the existing request-list and dashboard scoping.
+     */
+    private String staffDistrict(UserPrincipal principal) {
+        if (principal == null || principal.getRole() != UserRole.STAFF) return null;
+        String district = userRepository.findById(principal.getId())
+                .map(User::getDistrict).orElse(null);
+        return (district != null && !district.isBlank()) ? district : null;
+    }
+
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> monthlyVolume(int months) {
+    public List<Map<String, Object>> monthlyVolume(int months, UserPrincipal principal) {
         LocalDateTime since = LocalDateTime.now().minusMonths(months);
-        return requestRepository.monthlyVolume(since).stream()
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.monthlyVolume(since)
+                : requestRepository.monthlyVolumeByDistrict(since, district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("month", row[0]);
@@ -112,8 +130,12 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> byPriority() {
-        return requestRepository.countByFinalPriority().stream()
+    public List<Map<String, Object>> byPriority(UserPrincipal principal) {
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.countByFinalPriority()
+                : requestRepository.countByFinalPriorityByDistrict(district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("priority", row[0]);
@@ -123,8 +145,12 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> byCategory() {
-        return requestRepository.countByCategory().stream()
+    public List<Map<String, Object>> byCategory(UserPrincipal principal) {
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.countByCategory()
+                : requestRepository.countByCategoryByDistrict(district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("category", row[0]);
@@ -134,8 +160,12 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> byProvince() {
-        return requestRepository.countByProvince().stream()
+    public List<Map<String, Object>> byProvince(UserPrincipal principal) {
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.countByProvince()
+                : requestRepository.countByProvinceByDistrict(district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("province", row[0]);
@@ -145,8 +175,12 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> bySector() {
-        return requestRepository.countBySector().stream()
+    public List<Map<String, Object>> bySector(UserPrincipal principal) {
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.countBySector()
+                : requestRepository.countBySectorByDistrict(district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("sector", row[0]);
@@ -156,8 +190,12 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> technicianPerformance() {
-        return requestRepository.technicianPerformance().stream()
+    public List<Map<String, Object>> technicianPerformance(UserPrincipal principal) {
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.technicianPerformance()
+                : requestRepository.technicianPerformanceByDistrict(district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("technicianId", row[0]);
@@ -165,6 +203,14 @@ public class ReportService {
                     m.put("lastName", row[2]);
                     m.put("totalAssigned", row[3]);
                     m.put("totalResolved", row[4]);
+                    // Detail columns for the staff/admin reports table —
+                    // any of these may be null (no resolutions yet / no
+                    // technician profile row).
+                    m.put("avgResolutionHours", row[5]);
+                    m.put("rating", row[6]);
+                    m.put("currentWorkload", row[7]);
+                    m.put("maxWorkload", row[8]);
+                    m.put("isAvailable", row[9]);
                     return m;
                 }).toList();
     }
@@ -183,8 +229,12 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> byStatus() {
-        return requestRepository.countByStatusGrouped().stream()
+    public List<Map<String, Object>> byStatus(UserPrincipal principal) {
+        String district = staffDistrict(principal);
+        List<Object[]> rows = district == null
+                ? requestRepository.countByStatusGrouped()
+                : requestRepository.countByStatusGroupedByDistrict(district);
+        return rows.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("status", row[0]);
@@ -196,9 +246,12 @@ public class ReportService {
     // ── SLA metrics ──────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public Map<String, Object> slaMetrics() {
+    public Map<String, Object> slaMetrics(UserPrincipal principal) {
+        String district = staffDistrict(principal);
         // Native query always returns List<Object[]> — one row, four columns
-        List<Object[]> rows = requestRepository.slaMetrics();
+        List<Object[]> rows = district == null
+                ? requestRepository.slaMetrics()
+                : requestRepository.slaMetricsByDistrict(district);
         Object[] row = (rows != null && !rows.isEmpty()) ? rows.get(0) : new Object[]{0L, 0L, 0L, 0L};
         long breached          = row[0] != null ? ((Number) row[0]).longValue() : 0L;
         long atRisk            = row[1] != null ? ((Number) row[1]).longValue() : 0L;

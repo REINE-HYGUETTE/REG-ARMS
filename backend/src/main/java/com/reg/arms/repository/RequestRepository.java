@@ -43,14 +43,33 @@ public interface RequestRepository extends JpaRepository<Request, Long>, JpaSpec
            nativeQuery = true)
     List<Object[]> countByStatusGrouped();
 
+    /** District-scoped variant — used for STAFF report views. */
+    @Query(value = "SELECT status, COUNT(*) FROM requests " +
+                   "WHERE LOWER(district) = LOWER(:district) GROUP BY status",
+           nativeQuery = true)
+    List<Object[]> countByStatusGroupedByDistrict(@Param("district") String district);
+
     @Query("SELECT r.province, COUNT(r) FROM Request r GROUP BY r.province")
     List<Object[]> countByProvince();
+
+    /** District-scoped variant — used for STAFF report views. */
+    @Query("SELECT r.province, COUNT(r) FROM Request r " +
+           "WHERE LOWER(r.district) = LOWER(:district) GROUP BY r.province")
+    List<Object[]> countByProvinceByDistrict(@Param("district") String district);
 
     @Query(value = "SELECT sector, COUNT(*) AS cnt FROM requests " +
                    "WHERE sector IS NOT NULL AND sector <> '' " +
                    "GROUP BY sector ORDER BY cnt DESC LIMIT 20",
            nativeQuery = true)
     List<Object[]> countBySector();
+
+    /** District-scoped variant — used for STAFF report views. */
+    @Query(value = "SELECT sector, COUNT(*) AS cnt FROM requests " +
+                   "WHERE sector IS NOT NULL AND sector <> '' " +
+                   "  AND LOWER(district) = LOWER(:district) " +
+                   "GROUP BY sector ORDER BY cnt DESC LIMIT 20",
+           nativeQuery = true)
+    List<Object[]> countBySectorByDistrict(@Param("district") String district);
 
     @Query(value = "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*), " +
                    "SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END) " +
@@ -59,22 +78,69 @@ public interface RequestRepository extends JpaRepository<Request, Long>, JpaSpec
            nativeQuery = true)
     List<Object[]> monthlyVolume(@Param("since") LocalDateTime since);
 
+    /** District-scoped variant — used for STAFF report views. */
+    @Query(value = "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*), " +
+                   "SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END) " +
+                   "FROM requests WHERE created_at >= :since " +
+                   "  AND LOWER(district) = LOWER(:district) " +
+                   "GROUP BY month ORDER BY month",
+           nativeQuery = true)
+    List<Object[]> monthlyVolumeByDistrict(@Param("since") LocalDateTime since,
+                                           @Param("district") String district);
+
     @Query(value = "SELECT COALESCE(manual_priority::text, ai_priority::text, 'Medium') AS priority, COUNT(*) " +
                    "FROM requests GROUP BY priority",
            nativeQuery = true)
     List<Object[]> countByFinalPriority();
 
+    /** District-scoped variant — used for STAFF report views. */
+    @Query(value = "SELECT COALESCE(manual_priority::text, ai_priority::text, 'Medium') AS priority, COUNT(*) " +
+                   "FROM requests WHERE LOWER(district) = LOWER(:district) GROUP BY priority",
+           nativeQuery = true)
+    List<Object[]> countByFinalPriorityByDistrict(@Param("district") String district);
+
     @Query("SELECT r.category.name, COUNT(r) FROM Request r GROUP BY r.category.name ORDER BY COUNT(r) DESC")
     List<Object[]> countByCategory();
 
+    /** District-scoped variant — used for STAFF report views. */
+    @Query("SELECT r.category.name, COUNT(r) FROM Request r " +
+           "WHERE LOWER(r.district) = LOWER(:district) " +
+           "GROUP BY r.category.name ORDER BY COUNT(r) DESC")
+    List<Object[]> countByCategoryByDistrict(@Param("district") String district);
+
+    // Columns: tech user id, first/last name, assigned count, resolved count,
+    // avg resolution hours, rating, current workload, max workload, available
     @Query(value = "SELECT r.assigned_tech_id, u.first_name, u.last_name, " +
-                   "COUNT(*), SUM(CASE WHEN r.status = 'Resolved' THEN 1 ELSE 0 END) " +
+                   "COUNT(*), SUM(CASE WHEN r.status = 'Resolved' THEN 1 ELSE 0 END), " +
+                   "AVG(EXTRACT(EPOCH FROM (r.resolved_at - r.created_at)) / 3600) " +
+                   "  FILTER (WHERE r.status IN ('Resolved','Closed') AND r.resolved_at IS NOT NULL), " +
+                   "MAX(t.rating), MAX(t.current_workload), MAX(t.max_workload), BOOL_OR(t.is_available) " +
                    "FROM requests r JOIN users u ON u.id = r.assigned_tech_id " +
+                   "LEFT JOIN technicians t ON t.user_id = r.assigned_tech_id " +
                    "WHERE r.assigned_tech_id IS NOT NULL " +
                    "GROUP BY r.assigned_tech_id, u.first_name, u.last_name " +
                    "ORDER BY COUNT(*) DESC",
            nativeQuery = true)
     List<Object[]> technicianPerformance();
+
+    /**
+     * District-scoped technician performance — counts each technician's assigned
+     * and resolved requests within one district, so STAFF only see the activity
+     * of technicians working in their own district.
+     */
+    @Query(value = "SELECT r.assigned_tech_id, u.first_name, u.last_name, " +
+                   "COUNT(*), SUM(CASE WHEN r.status = 'Resolved' THEN 1 ELSE 0 END), " +
+                   "AVG(EXTRACT(EPOCH FROM (r.resolved_at - r.created_at)) / 3600) " +
+                   "  FILTER (WHERE r.status IN ('Resolved','Closed') AND r.resolved_at IS NOT NULL), " +
+                   "MAX(t.rating), MAX(t.current_workload), MAX(t.max_workload), BOOL_OR(t.is_available) " +
+                   "FROM requests r JOIN users u ON u.id = r.assigned_tech_id " +
+                   "LEFT JOIN technicians t ON t.user_id = r.assigned_tech_id " +
+                   "WHERE r.assigned_tech_id IS NOT NULL " +
+                   "  AND LOWER(r.district) = LOWER(:district) " +
+                   "GROUP BY r.assigned_tech_id, u.first_name, u.last_name " +
+                   "ORDER BY COUNT(*) DESC",
+           nativeQuery = true)
+    List<Object[]> technicianPerformanceByDistrict(@Param("district") String district);
 
     @Query(value = "SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) " +
                    "FROM requests WHERE status IN ('Resolved','Closed') AND resolved_at IS NOT NULL",
@@ -237,6 +303,40 @@ public interface RequestRepository extends JpaRepository<Request, Long>, JpaSpec
         "FROM requests",
         nativeQuery = true)
     List<Object[]> slaMetrics();
+
+    /** District-scoped SLA metrics — used so STAFF only see SLA health for their own district. */
+    @Query(value =
+        "SELECT " +
+        "  COUNT(*) FILTER (WHERE status NOT IN ('Resolved','Closed','Cancelled') " +
+        "    AND CASE COALESCE(manual_priority::text, ai_priority::text, 'Medium') " +
+        "          WHEN 'Critical' THEN created_at + INTERVAL '2 hours' " +
+        "          WHEN 'High'     THEN created_at + INTERVAL '8 hours' " +
+        "          WHEN 'Medium'   THEN created_at + INTERVAL '24 hours' " +
+        "          ELSE                 created_at + INTERVAL '72 hours' END < NOW() " +
+        "  ) AS breached, " +
+        "  COUNT(*) FILTER (WHERE status NOT IN ('Resolved','Closed','Cancelled') " +
+        "    AND CASE COALESCE(manual_priority::text, ai_priority::text, 'Medium') " +
+        "          WHEN 'Critical' THEN created_at + INTERVAL '2 hours' " +
+        "          WHEN 'High'     THEN created_at + INTERVAL '8 hours' " +
+        "          WHEN 'Medium'   THEN created_at + INTERVAL '24 hours' " +
+        "          ELSE                 created_at + INTERVAL '72 hours' END >= NOW() " +
+        "    AND EXTRACT(EPOCH FROM (NOW() - created_at)) / " +
+        "        CASE COALESCE(manual_priority::text, ai_priority::text, 'Medium') " +
+        "          WHEN 'Critical' THEN 7200   WHEN 'High' THEN 28800 " +
+        "          WHEN 'Medium'   THEN 86400  ELSE 259200 END >= 0.7 " +
+        "  ) AS at_risk, " +
+        "  COUNT(*) FILTER (WHERE status IN ('Resolved','Closed') AND resolved_at IS NOT NULL " +
+        "    AND resolved_at <= CASE COALESCE(manual_priority::text, ai_priority::text, 'Medium') " +
+        "          WHEN 'Critical' THEN created_at + INTERVAL '2 hours' " +
+        "          WHEN 'High'     THEN created_at + INTERVAL '8 hours' " +
+        "          WHEN 'Medium'   THEN created_at + INTERVAL '24 hours' " +
+        "          ELSE                 created_at + INTERVAL '72 hours' END " +
+        "  ) AS resolved_within_sla, " +
+        "  COUNT(*) FILTER (WHERE status IN ('Resolved','Closed') AND resolved_at IS NOT NULL) AS total_resolved " +
+        "FROM requests " +
+        "WHERE LOWER(district) = LOWER(:district)",
+        nativeQuery = true)
+    List<Object[]> slaMetricsByDistrict(@Param("district") String district);
 
     // ── Feature 4: hotspot detection ─────────────────────────────────────────
 

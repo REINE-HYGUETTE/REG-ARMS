@@ -131,9 +131,19 @@ public class RequestService {
             requestRepository.save(request);
         }
 
-        notificationService.notifyAdmins(request, NotificationType.NEW_REQUEST,
+        // Admins plus the STAFF responsible for this request's district — staff
+        // handle district routing, so they must learn about new requests too.
+        notificationService.notifyStaffAndAdmins(request, NotificationType.NEW_REQUEST,
                 "New Request Submitted",
-                "A new request " + code + " has been submitted by " + customer.getFullName() + ".");
+                "A new request " + code + " has been submitted by " + customer.getFullName()
+                + " in " + request.getDistrict() + " district.");
+
+        // In-app acknowledgement for the customer (mirrors the email below, so the
+        // confirmation is also visible in their notification feed).
+        notificationService.notifyUser(customer, request, NotificationType.NEW_REQUEST,
+                "Request Received",
+                "Your request " + code + " has been received and is pending review. "
+                + "You will be notified when it is assigned to a technician.");
 
         activityLogService.logRequest(customer, request, "REQUEST_CREATED",
                 "Request submitted by customer", null,
@@ -333,10 +343,20 @@ public class RequestService {
             commentRepository.save(comment);
         }
 
-        notificationService.notifyUser(request.getCustomer(), request,
-                NotificationType.STATUS_UPDATE,
-                "Request Status Updated",
-                "Your request " + request.getRequestCode() + " status changed to " + dto.getStatus().toDbValue() + ".");
+        // Resolution gets its own type + friendlier message; other transitions
+        // keep the generic status-update notification.
+        if (dto.getStatus() == RequestStatus.Resolved) {
+            notificationService.notifyUser(request.getCustomer(), request,
+                    NotificationType.RESOLVED,
+                    "Request Resolved",
+                    "Your request " + request.getRequestCode() + " has been resolved. "
+                    + "Please review the resolution and rate your experience.");
+        } else {
+            notificationService.notifyUser(request.getCustomer(), request,
+                    NotificationType.STATUS_UPDATE,
+                    "Request Status Updated",
+                    "Your request " + request.getRequestCode() + " status changed to " + dto.getStatus().toDbValue() + ".");
+        }
 
         User actor = userRepository.findById(principal.getId()).orElse(null);
         activityLogService.logRequest(actor, request, "STATUS_CHANGED",
@@ -401,6 +421,15 @@ public class RequestService {
                     ? "CRITICAL request " + request.getRequestCode()
                       + " has been assigned to you and requires immediate action. Open it now."
                     : "Request " + request.getRequestCode() + " has been assigned to you.");
+
+        // Keep the customer in the loop: their request now has a technician.
+        if (request.getCustomer() != null) {
+            notificationService.notifyUser(request.getCustomer(), request,
+                    NotificationType.ASSIGNMENT,
+                    "Technician Assigned",
+                    "A technician has been assigned to your request "
+                    + request.getRequestCode() + " and will begin working on it shortly.");
+        }
 
         // Item 7: log recommendation rank if staff assigned from the AI panel
         String assignNote = "Request assigned to " + technician.getFullName();
@@ -671,6 +700,22 @@ public class RequestService {
                 "Priority manually overridden (AI feedback recorded)",
                 oldPriority,
                 dto.getPriority().name());
+
+        // Priority drives the technician's queue order and SLA window, so the
+        // assigned technician must know when it changes. (Endpoint is STAFF-only,
+        // so the actor is never the technician themselves.)
+        if (request.getAssignedTechnician() != null
+                && !dto.getPriority().name().equals(oldPriority)) {
+            boolean escalatedToCritical = dto.getPriority() == PriorityLevel.Critical;
+            notificationService.notifyUser(request.getAssignedTechnician(), request,
+                    escalatedToCritical ? NotificationType.URGENT_ALERT : NotificationType.STATUS_UPDATE,
+                    escalatedToCritical ? "🚨 Request Escalated to CRITICAL"
+                                        : "Request Priority Updated",
+                    "Priority of request " + request.getRequestCode() + " changed from "
+                    + (oldPriority != null ? oldPriority : "unset") + " to "
+                    + dto.getPriority().name() + "."
+                    + (escalatedToCritical ? " Immediate action is required." : ""));
+        }
 
         // ── AI accuracy feedback loop ────────────────────────────────────
         // When staff sets (or changes) the manual priority we treat that as

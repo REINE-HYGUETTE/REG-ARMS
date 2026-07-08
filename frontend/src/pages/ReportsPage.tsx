@@ -1,10 +1,37 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
-import { Printer, Download, FileText, ChevronDown, ChevronUp, FileDown, AlertTriangle } from 'lucide-react'
+import {
+  Printer, Download, FileText, ChevronDown, ChevronUp, FileDown, AlertTriangle, MapPin,
+  Clock, CheckCircle, Timer, ShieldAlert, ShieldCheck, Wrench, Star, TrendingUp,
+} from 'lucide-react'
 import api from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import Spinner from '@/components/ui/Spinner'
+import MetricCard from '@/components/ui/MetricCard'
 import { PriorityBadge } from '@/components/ui/Badge'
+import type { DashboardStats } from '@/types'
+
+interface SlaMetrics {
+  breached: number
+  atRisk: number
+  resolvedWithinSla: number
+  totalResolved: number
+  withinSlaRate: number
+}
+
+interface TechPerfRow {
+  technicianId: number
+  firstName: string
+  lastName: string
+  totalAssigned: number
+  totalResolved: number
+  avgResolutionHours: number | null
+  rating: number | null
+  currentWorkload: number | null
+  maxWorkload: number | null
+  isAvailable: boolean | null
+}
 
 async function downloadFullReportPdf(period: string) {
   const response = await api.get('/reports/export/full-report/pdf', {
@@ -160,7 +187,11 @@ function ExportCard({ type, label, desc }: { type: ExportType; label: string; de
   )
 }
 
+// The backend's /reports/monthly-volume expects a number of months
+const MONTHS_BY_PERIOD: Record<string, number> = { month: 1, quarter: 3, year: 12 }
+
 export default function ReportsPage() {
+  const { role } = useAuth()
   const [period, setPeriod] = useState('year')
   const [printLoading, setPrintLoading] = useState(false)
   const [printError, setPrintError] = useState('')
@@ -181,7 +212,7 @@ export default function ReportsPage() {
     queryKey: ['report-volume', period],
     queryFn: async () => {
       const { data } = await api.get<{ month: string; total: number; resolved: number }[]>(
-        '/reports/monthly-volume', { params: { period } }
+        '/reports/monthly-volume', { params: { months: MONTHS_BY_PERIOD[period] ?? 12 } }
       )
       return data.map((d) => ({ month: d.month, count: d.total, resolved: d.resolved }))
     },
@@ -206,10 +237,50 @@ export default function ReportsPage() {
   const { data: techData } = useQuery({
     queryKey: ['report-tech-perf'],
     queryFn: async () => {
-      const { data } = await api.get<{ firstName: string; lastName: string; totalResolved: number; totalAssigned: number }[]>('/reports/technician-performance')
-      return data.map((d) => ({ name: `${d.firstName} ${d.lastName}`, resolved: d.totalResolved, assigned: d.totalAssigned }))
+      const { data } = await api.get<TechPerfRow[]>('/reports/technician-performance')
+      return data.map((d) => ({
+        name: `${d.firstName} ${d.lastName}`,
+        resolved: d.totalResolved,
+        assigned: d.totalAssigned,
+        rate: d.totalAssigned > 0 ? (d.totalResolved / d.totalAssigned) * 100 : 0,
+        avgHours: d.avgResolutionHours,
+        rating: d.rating,
+        currentWorkload: d.currentWorkload,
+        maxWorkload: d.maxWorkload,
+        available: d.isAvailable,
+      }))
     },
   })
+
+  const { data: stats } = useQuery({
+    queryKey: ['report-stats'],
+    queryFn: async () => (await api.get<DashboardStats>('/requests/stats')).data,
+  })
+
+  const { data: sla } = useQuery({
+    queryKey: ['report-sla'],
+    queryFn: async () => (await api.get<SlaMetrics>('/reports/sla-metrics')).data,
+  })
+
+  const { data: statusData } = useQuery({
+    queryKey: ['report-status'],
+    queryFn: async () => {
+      const { data } = await api.get<{ status: string; count: number }[]>('/reports/by-status')
+      return data.map((d) => ({ status: d.status.replace('_', ' '), count: d.count }))
+    },
+  })
+
+  const { data: sectorData } = useQuery({
+    queryKey: ['report-sector'],
+    queryFn: async () => {
+      const { data } = await api.get<{ sector: string; count: number }[]>('/reports/by-sector')
+      return data.slice(0, 8)
+    },
+  })
+
+  const resolutionRate = stats && stats.total > 0
+    ? ((stats.resolved + stats.closed) / stats.total) * 100
+    : null
 
   const { data: aiData } = useQuery({
     queryKey: ['report-ai'],
@@ -224,6 +295,17 @@ export default function ReportsPage() {
 
   return (
     <div>
+      {/* Staff see district-scoped data (enforced by the backend) */}
+      {role === 'STAFF' && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-2xl px-4 py-3 mb-4 text-sm">
+          <MapPin size={15} className="shrink-0" />
+          <span>
+            <span className="font-semibold">District view</span> — all figures and exports on this
+            page cover only the requests and technicians of your assigned district.
+          </span>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex items-center flex-wrap gap-3 bg-white rounded-2xl border border-border/70 p-4 shadow-sm mb-6">
         <label className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Period:</label>
@@ -253,13 +335,85 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Exports */}
-      <h2 className="text-[15px] font-bold mb-3 flex items-center gap-2"><FileDown size={16} className="text-text-muted" /> Export Reports</h2>
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        {exportConfigs.map((cfg) => (
-          <ExportCard key={cfg.type} {...cfg} />
-        ))}
+      {/* ── Overview KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <MetricCard
+          label="Total Requests"
+          value={(stats?.total ?? 0).toLocaleString()}
+          icon={<FileText size={20} />}
+          variant="blue"
+          trend={{ value: `${stats?.thisWeek ?? 0} this week`, direction: 'neutral' }}
+        />
+        <MetricCard label="Pending"     value={(stats?.pending ?? 0).toLocaleString()}    icon={<Clock size={20} />}         variant="amber" />
+        <MetricCard label="In Progress" value={(stats?.inProgress ?? 0).toLocaleString()} icon={<Wrench size={20} />}        variant="purple" />
+        <MetricCard label="Resolved"    value={(stats?.resolved ?? 0).toLocaleString()}   icon={<CheckCircle size={20} />}   variant="green" />
+        <MetricCard label="Critical"    value={(stats?.critical ?? 0).toLocaleString()}   icon={<AlertTriangle size={20} />} variant="red" />
+        <MetricCard
+          label="Resolution Rate"
+          value={resolutionRate != null ? `${resolutionRate.toFixed(0)}%` : '—'}
+          icon={<TrendingUp size={20} />}
+          variant="teal"
+          trend={{ value: 'resolved + closed', direction: 'neutral' }}
+        />
       </div>
+
+      {/* ── SLA Health ── */}
+      <section className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Timer size={15} className="text-primary" />
+          <h3 className="text-sm font-bold text-text">SLA Health</h3>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white rounded-2xl border border-red-100 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center">
+                <ShieldAlert size={15} className="text-red-600" />
+              </div>
+              <span className="text-[11px] font-bold text-red-600 uppercase tracking-wide">Breached</span>
+            </div>
+            <p className="text-3xl font-bold text-red-700 leading-none mb-1">{sla?.breached ?? 0}</p>
+            <p className="text-[11px] text-red-400">Past deadline, still open</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-amber-100 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
+                <AlertTriangle size={15} className="text-amber-600" />
+              </div>
+              <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wide">At Risk</span>
+            </div>
+            <p className="text-3xl font-bold text-amber-700 leading-none mb-1">{sla?.atRisk ?? 0}</p>
+            <p className="text-[11px] text-amber-400">≥70% of SLA elapsed</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-emerald-100 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <ShieldCheck size={15} className="text-emerald-600" />
+              </div>
+              <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide">Within SLA</span>
+            </div>
+            <p className="text-3xl font-bold text-emerald-700 leading-none mb-1">
+              {sla && sla.totalResolved > 0 ? `${sla.withinSlaRate.toFixed(0)}%` : '—'}
+            </p>
+            <p className="text-[11px] text-emerald-500">
+              {sla && sla.totalResolved > 0
+                ? `${sla.resolvedWithinSla} / ${sla.totalResolved} resolved`
+                : 'No resolved requests yet'}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl border border-border/70 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center">
+                <Clock size={15} className="text-blue-600" />
+              </div>
+              <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wide">Avg Resolution</span>
+            </div>
+            <p className="text-3xl font-bold text-text leading-none mb-1">
+              {stats?.avgResolutionHours != null ? `${stats.avgResolutionHours.toFixed(1)}h` : '—'}
+            </p>
+            <p className="text-[11px] text-text-muted">Across all resolved</p>
+          </div>
+        </div>
+      </section>
 
       {/* Charts */}
       {volLoading ? (
@@ -333,17 +487,113 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
             <div className="bg-white rounded-2xl border border-border/70 p-6 shadow-sm">
-              <h3 className="text-sm font-bold text-text mb-0.5">Technician Performance</h3>
-              <p className="text-[11px] text-text-muted mb-4">Resolved tasks per technician</p>
+              <h3 className="text-sm font-bold text-text mb-0.5">Requests by Status</h3>
+              <p className="text-[11px] text-text-muted mb-4">Current pipeline breakdown</p>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={techData ?? []} layout="vertical">
+                <BarChart data={statusData ?? []} barCategoryGap="35%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis dataKey="name" type="category" width={75} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="status" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="resolved" fill={COLORS.green} radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" fill={COLORS.purple} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Top Sectors */}
+          <div className="bg-white rounded-2xl border border-border/70 p-6 shadow-sm mb-4">
+            <h3 className="text-sm font-bold text-text mb-0.5">Top Sectors by Request Volume</h3>
+            <p className="text-[11px] text-text-muted mb-4">
+              {role === 'STAFF' ? 'Where requests concentrate within your district' : 'Highest-volume sectors nationwide'}
+            </p>
+            {sectorData && sectorData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={Math.max(160, sectorData.length * 36)}>
+                <BarChart data={sectorData} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis dataKey="sector" type="category" width={110} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Requests" fill={COLORS.teal} radius={[0, 4, 4, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-text-muted py-6 text-center">No sector data yet.</p>
+            )}
+          </div>
+
+          {/* Technician Performance table */}
+          <div className="bg-white rounded-2xl border border-border/70 shadow-sm overflow-hidden mb-6">
+            <div className="px-5 py-4 border-b border-border">
+              <div className="text-sm font-semibold">Technician Performance</div>
+              <div className="text-xs text-text-muted mt-0.5">
+                {role === 'STAFF'
+                  ? 'Activity of technicians handling requests in your district'
+                  : 'Activity of all technicians with assigned requests'}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-surface-alt border-b border-border">
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Technician</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Assigned</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Resolved</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Resolution Rate</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Avg Time</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Rating</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Workload</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-text-muted uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(techData ?? []).map((t) => (
+                    <tr key={t.name} className="border-b border-border last:border-0 hover:bg-surface-alt">
+                      <td className="px-4 py-3 text-sm font-medium">{t.name}</td>
+                      <td className="px-4 py-3 text-sm">{t.assigned}</td>
+                      <td className="px-4 py-3 text-sm text-green-700 font-semibold">{t.resolved}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-surface-alt rounded-full overflow-hidden max-w-[80px]">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${t.rate}%` }} />
+                          </div>
+                          <span className="text-xs font-mono font-semibold min-w-[40px]">{t.rate.toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">{t.avgHours != null ? `${Number(t.avgHours).toFixed(1)}h` : '—'}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {t.rating != null ? (
+                          <span className="inline-flex items-center gap-1 font-semibold">
+                            <Star size={12} className="text-amber-400 fill-amber-400" />
+                            {Number(t.rating).toFixed(1)}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {t.currentWorkload != null && t.maxWorkload != null
+                          ? `${t.currentWorkload} / ${t.maxWorkload}`
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {t.available != null && (
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                            t.available ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {t.available ? 'Available' : 'Unavailable'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {(techData ?? []).length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-6 text-center text-xs text-text-muted">
+                        No technician activity yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -389,6 +639,16 @@ export default function ReportsPage() {
               </div>
             </div>
           )}
+
+          {/* Exports */}
+          <h2 className="text-[15px] font-bold mt-6 mb-3 flex items-center gap-2">
+            <FileDown size={16} className="text-text-muted" /> Export Reports
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            {exportConfigs.map((cfg) => (
+              <ExportCard key={cfg.type} {...cfg} />
+            ))}
+          </div>
         </>
       )}
     </div>

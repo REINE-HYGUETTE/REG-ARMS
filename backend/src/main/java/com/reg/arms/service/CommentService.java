@@ -5,6 +5,7 @@ import com.reg.arms.dto.response.CommentResponse;
 import com.reg.arms.entity.Comment;
 import com.reg.arms.entity.Request;
 import com.reg.arms.entity.User;
+import com.reg.arms.entity.enums.NotificationType;
 import com.reg.arms.entity.enums.UserRole;
 import com.reg.arms.exception.BadRequestException;
 import com.reg.arms.exception.ForbiddenException;
@@ -28,6 +29,7 @@ public class CommentService {
     private final RequestRepository requestRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -134,7 +136,57 @@ public class CommentService {
                     frontendUrl + "/requests/" + request.getId());
         }
 
+        notifyThreadParticipants(request, user, internal);
+
         return CommentResponse.from(comment);
+    }
+
+    /**
+     * In-app notifications for a new message on a request's thread.
+     * Everyone involved with the request — except the author — is notified:
+     * <ul>
+     *   <li>the customer, for customer-visible (non-internal) messages only</li>
+     *   <li>the assigned technician</li>
+     *   <li>the staff side: the explicitly assigned staff member if there is one;
+     *       otherwise, when a customer or technician writes, the district's staff
+     *       and the admins — so the message never sits unseen</li>
+     * </ul>
+     */
+    private void notifyThreadParticipants(Request request, User author, boolean internal) {
+        String title = internal
+                ? "New Internal Note: " + request.getRequestCode()
+                : "New Message: " + request.getRequestCode();
+        String message = author.getFullName() + " posted a new "
+                + (internal ? "internal note" : "message") + " on request "
+                + request.getRequestCode() + " (" + request.getTitle() + ").";
+
+        java.util.Set<Long> notified = new java.util.HashSet<>();
+        notified.add(author.getId());
+
+        User customer = request.getCustomer();
+        if (!internal && customer != null && notified.add(customer.getId())) {
+            notificationService.notifyUser(customer, request,
+                    NotificationType.COMMENT, title, message);
+        }
+
+        User technician = request.getAssignedTechnician();
+        if (technician != null && notified.add(technician.getId())) {
+            notificationService.notifyUser(technician, request,
+                    NotificationType.COMMENT, title, message);
+        }
+
+        User staff = request.getAssignedStaff();
+        if (staff != null) {
+            if (notified.add(staff.getId())) {
+                notificationService.notifyUser(staff, request,
+                        NotificationType.COMMENT, title, message);
+            }
+        } else if (author.getRole() == UserRole.CUSTOMER || author.getRole() == UserRole.TECHNICIAN) {
+            // No staff member is pinned to this request — alert the district's
+            // staff (and admins) that the customer/technician wrote something.
+            notificationService.notifyStaffAndAdmins(request,
+                    NotificationType.COMMENT, title, message);
+        }
     }
 
     @Transactional

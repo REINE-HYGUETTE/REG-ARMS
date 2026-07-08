@@ -20,43 +20,63 @@ public class ReportController {
 
     private final ReportService reportService;
 
+    // Core operational reports are visible to ADMIN (global) and STAFF
+    // (automatically scoped to their own district inside ReportService).
+
     @GetMapping("/monthly-volume")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<List<Map<String, Object>>> monthlyVolume(
-            @RequestParam(defaultValue = "12") int months) {
-        return ResponseEntity.ok(reportService.monthlyVolume(months));
+            @RequestParam(defaultValue = "12") int months,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.monthlyVolume(months, principal));
     }
 
     @GetMapping("/by-priority")
-    public ResponseEntity<List<Map<String, Object>>> byPriority() {
-        return ResponseEntity.ok(reportService.byPriority());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<Map<String, Object>>> byPriority(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.byPriority(principal));
     }
 
     @GetMapping("/by-category")
-    public ResponseEntity<List<Map<String, Object>>> byCategory() {
-        return ResponseEntity.ok(reportService.byCategory());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<Map<String, Object>>> byCategory(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.byCategory(principal));
     }
 
     @GetMapping("/by-province")
-    public ResponseEntity<List<Map<String, Object>>> byProvince() {
-        return ResponseEntity.ok(reportService.byProvince());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<Map<String, Object>>> byProvince(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.byProvince(principal));
     }
 
     @GetMapping("/by-sector")
-    public ResponseEntity<List<Map<String, Object>>> bySector() {
-        return ResponseEntity.ok(reportService.bySector());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<Map<String, Object>>> bySector(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.bySector(principal));
     }
 
     @GetMapping("/by-status")
-    public ResponseEntity<List<Map<String, Object>>> byStatus() {
-        return ResponseEntity.ok(reportService.byStatus());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<Map<String, Object>>> byStatus(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.byStatus(principal));
     }
 
     @GetMapping("/technician-performance")
-    public ResponseEntity<List<Map<String, Object>>> technicianPerformance() {
-        return ResponseEntity.ok(reportService.technicianPerformance());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<List<Map<String, Object>>> technicianPerformance(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.technicianPerformance(principal));
     }
 
+    // Model-level accuracy metrics (no request-level data) — same visibility
+    // as the other AI analytics endpoints below.
     @GetMapping("/ai-accuracy")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<List<Map<String, Object>>> aiAccuracy() {
         return ResponseEntity.ok(reportService.aiAccuracy());
     }
@@ -85,8 +105,9 @@ public class ReportController {
 
     @GetMapping("/sla-metrics")
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
-    public ResponseEntity<Map<String, Object>> slaMetrics() {
-        return ResponseEntity.ok(reportService.slaMetrics());
+    public ResponseEntity<Map<String, Object>> slaMetrics(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(reportService.slaMetrics(principal));
     }
 
     // ── Feature 4: hotspot / cluster detection ────────────────────────────────

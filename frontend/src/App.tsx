@@ -72,9 +72,9 @@ export default function App() {
                 </ProtectedRoute>
               } />
 
-              {/* ── Admin only (system oversight) ── */}
+              {/* ── Admin (global) + Staff (district-scoped by the backend) ── */}
               <Route path="reports" element={
-                <ProtectedRoute roles={['ADMIN']}>
+                <ProtectedRoute roles={['ADMIN', 'STAFF']}>
                   <ReportsPage />
                 </ProtectedRoute>
               } />
